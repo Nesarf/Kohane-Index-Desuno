@@ -375,7 +375,7 @@ const BLENDER_STATS_EXPR = [
 //   C9 = an embedded object/plugin NAME, UTF-16LE, e.g. C9 20 <32 bytes> = "Fruity dB Meter"
 // Sampled files also carry a trailing 48 51 56 00 ("HQV") marker inside the data block.
 // Method + evidence: research/fl-studio/notes/fl-studio-formats.md (section 11), decode-flhd.mjs.
-function decodeFlContainer(buf) {
+function decodeNativeContainer(buf) {
   const out = { container: false, writerVersion: null, names: [], headerBytes: 0, dataBytes: 0, trailer: null };
   if (!buf || buf.length < 16) return out;
   if (buf.toString("latin1", 0, 4) !== "FLhd") return out;
@@ -1008,7 +1008,7 @@ function scanPluginDatabase(dir, maxFiles = 600) {
       }
       let d;
       try {
-        d = decodeFlContainer(fs.readFileSync(full));
+        d = decodeNativeContainer(fs.readFileSync(full));
       } catch {
         out.skipped++;
         continue;
@@ -1158,8 +1158,10 @@ function registerDefaultAnalyzer() {
     match(target) {
       try {
         if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) return false;
+        const magic = LOCAL_NATIVE_FORMATS.containerMagic;
+        if (!magic) return false;                       // no local table: this machine claims nothing
         const head = readHeader(target, 4);
-        return !!head && head.length === 4 && head.toString("latin1") === "FLhd";
+        return !!head && head.length === 4 && head.toString("latin1") === magic;
       } catch { return false; }
     },
     async analyze(target, opts = {}) {
@@ -1167,7 +1169,7 @@ function registerDefaultAnalyzer() {
       try { buf = fs.readFileSync(target); } catch (e) {
         return { ok: false, kind: "kb-container", detail: `unreadable: ${String(e && e.message || e)}` };
       }
-      const d = decodeFlContainer(buf);
+      const d = decodeNativeContainer(buf);
       if (!d.container) return { ok: false, kind: "kb-container", detail: "not a native plugin container" };
       const fields = {
         kind: "kb-container",
@@ -7165,7 +7167,7 @@ export {
   dshHome, libraryDir, indexFile, payloadDir,
   OBJ_TYPES, DISPOSITION, dispositionFor, fingerprint,
   MEDIA_PROVIDERS, registerDefaultMediaProvider, mediaFingerprint,
-  ANALYZER_PROVIDERS, registerDefaultAnalyzer, analyzeObject, readBlendHeader, findUnityProjectRoot, decodeFlContainer,
+  ANALYZER_PROVIDERS, registerDefaultAnalyzer, analyzeObject, readBlendHeader, findUnityProjectRoot, decodeNativeContainer,
   KOHANE_PLUGIN_BRAND, KOHANE_PLUGIN_ROLES, KOHANE_CAPABILITIES, KOHANE_PLUGIN_FLAGSHIP,
   PLUGIN_FUNCTION_VOCAB, resolveKohanePlugins, pluginKey, pluginSlug, kohanePluginName, classifyPluginRole,
   extractFunctionWord, derivedFunctionWord, derivedKohaneName, kohaneNameTaken, pluginProvenance,

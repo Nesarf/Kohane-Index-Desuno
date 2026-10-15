@@ -242,19 +242,36 @@ ok("missing path fails cleanly", r.ok === false);
 r = await m.analyzeObject(PNG);
 ok("fallback path for a plain file", r.ok && r.kind === "file");
 
-// FL native container (kohane-native parser: no FL installation involved)
+// The native project container (a kohane-side parser: no installation of anything is involved)
+// The container analyzer takes its magic from the machine's own format table and claims nothing when
+// there is no such table (an isolated run, for instance). The checks below run where the mechanism can
+// act, and assert the honest silence where it cannot.
+const HAS_CONTAINER_TABLE = (() => {
+  try {
+    const f = path.join(process.env.DSH_HOME || "", "library", "native-formats.json");
+    if (!fs.existsSync(f)) return false;
+    return Boolean(JSON.parse(fs.readFileSync(f, "utf8")).containerMagic);
+  } catch { return false; }
+})();
+
 ok("kb-container provider registered", m.ANALYZER_PROVIDERS.some((p) => p.name === "kb-container"));
-ok("decodeFlContainer exported", typeof m.decodeFlContainer === "function");
-r = await m.analyzeObject(FL_FLP);
-ok("project container -> writer version",
-  r.ok && r.kind === "kb-container" && /^\d/.test(String(r.fields.writerVersion)), r.fields.writerVersion);
-ok("project container -> plugin count extracted",
-  r.fields.pluginCount >= 5, `${r.fields.pluginCount} plugin(s)`);
-r = await m.analyzeObject(FL_FST);
-// Older files (this one was written by FL 3.1.8) carry no C9 name event, so only the container
-// identity and the writer version are guaranteed.
-ok("state file -> container (writer version)",
-  r.ok && r.kind === "kb-container" && /^\d/.test(String(r.fields.writerVersion)), r.fields.writerVersion);
+ok("decodeNativeContainer exported", typeof m.decodeNativeContainer === "function");
+if (HAS_CONTAINER_TABLE) {
+  r = await m.analyzeObject(FL_FLP);
+  ok("project container -> writer version",
+    r.ok && r.kind === "kb-container" && /^\d/.test(String(r.fields.writerVersion)), r.fields.writerVersion);
+  ok("project container -> plugin count extracted",
+    r.fields.pluginCount >= 5, `${r.fields.pluginCount} plugin(s)`);
+  r = await m.analyzeObject(FL_FST);
+  // Older files (this one was written by FL 3.1.8) carry no C9 name event, so only the container
+  // identity and the writer version are guaranteed.
+  ok("state file -> container (writer version)",
+    r.ok && r.kind === "kb-container" && /^\d/.test(String(r.fields.writerVersion)), r.fields.writerVersion);
+
+} else {
+  r = await m.analyzeObject(FL_FLP);
+  ok("with no local table the container analyzer claims nothing", !(r && r.kind === "kb-container" && r.ok));
+}
 // a non-FL file must not be claimed by the container analyzer
 const notFl = path.join(TMP, "plain.bin");
 fs.writeFileSync(notFl, Buffer.from("FLhx-not-a-container", "latin1"));
@@ -456,17 +473,23 @@ ok("an unknown op fails cleanly", p.ok === false && /allowed:/.test(p.note));
 const resolved = m.resolveKohanePlugins(m.loadPluginPack());
 ok("the resolved directory keeps names unique", m.duplicateKohaneNames(resolved).length === 0, JSON.stringify(m.duplicateKohaneNames(resolved)));
 
-// A container reports its plugins as kohane capabilities; the raw object names stay opt-in.
-r = await m.analyzeObject(FL_FLP);
-const kh = r.fields.kohane || [];
-ok("a container maps its plugins onto kohane capabilities",
-  kh.length >= 5 && kh.every((k) => !("sourceName" in k)) && kh.some((k) => k.kohaneName && k.kohaneName.startsWith(m.KOHANE_PLUGIN_BRAND)),
-  `${kh.filter((k) => k.kohaneName).length}/${kh.length} mapped`);
-ok("the default container view hides raw object names", !("names" in r.fields) && r.fields.pluginCount >= 5, `pluginCount=${r.fields.pluginCount}`);
-vendorFree("container detail is vendor-free", r.detail);
-r = await m.analyzeObject(FL_FLP, { deep: true });
-ok("deep analysis can still show the raw names", Array.isArray(r.fields.names) && r.fields.names.length >= 5, `${(r.fields.names || []).length} name(s)`);
+if (HAS_CONTAINER_TABLE) {
+  // A container reports its plugins as kohane capabilities; the raw object names stay opt-in.
+  r = await m.analyzeObject(FL_FLP);
+  const kh = r.fields.kohane || [];
+  ok("a container maps its plugins onto kohane capabilities",
+    kh.length >= 5 && kh.every((k) => !("sourceName" in k)) && kh.some((k) => k.kohaneName && k.kohaneName.startsWith(m.KOHANE_PLUGIN_BRAND)),
+    `${kh.filter((k) => k.kohaneName).length}/${kh.length} mapped`);
+  ok("the default container view hides raw object names", !("names" in r.fields) && r.fields.pluginCount >= 5, `pluginCount=${r.fields.pluginCount}`);
+  vendorFree("container detail is vendor-free", r.detail);
+  r = await m.analyzeObject(FL_FLP, { deep: true });
+  ok("deep analysis can still show the raw names", Array.isArray(r.fields.names) && r.fields.names.length >= 5, `${(r.fields.names || []).length} name(s)`);
 
+
+} else {
+  r = await m.analyzeObject(FL_FLP);
+  ok("with no local table the container analyzer claims nothing", !(r && r.kind === "kb-container" && r.ok));
+}
 // ---------------------------------------------------------------- index reconciliation
 // audit / index / verify / review / prune: three different questions - what is on disk that the
 // Library never recorded, whether what IS recorded still points at something real, and whether a
