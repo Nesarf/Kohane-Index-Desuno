@@ -139,7 +139,7 @@ function fingerprintObject(o) {
 const MEDIA_PROVIDERS = [];
 
 // Register built-in media analysis engines: ffprobe (same ffmpeg family used by
-// (a media player's own recognition tables) + a media metadata tool.
+// XSplit/PotPlayer; present on this machine) + MediaInfo.
 // Both are generic fallback providers (match always true); mediaFingerprint tries each
 // in order and returns on the first success.
 function registerDefaultMediaProvider() {
@@ -365,9 +365,9 @@ const BLENDER_STATS_EXPR = [
   "}))",
 ].join("\n");
 
-// ---- a music host's native project container -------------------------------
+// ---- FL Studio native container (FLhd) -------------------------------------
 // kohane-native: pure Node, no FL installation required. Layout:
-//   header chunk | u32 headerSize | header bytes | data chunk | u32 dataSize | event stream
+//   "FLhd" | u32 headerSize | header bytes | "FLdt" | u32 dataSize | event stream
 // The event stream is a sequence of `[id u8][len u8][payload]` records. The full record walk is not
 // decoded yet (unknown ids can desync it), so metadata is collected by matching the two events that
 // actually carry it - robust to unknown ids, and verified against FL Studio 20.7.2 samples:
@@ -1654,12 +1654,14 @@ const ZIP_PACKAGE_FORMATS = {
 // Machine-local format knowledge. Some file families are recognised through a table that is recorded
 // locally rather than shipped, because the table was recovered from this machine's own files. The
 // engine carries only the mechanism: it loads deps/local/native-formats.json when that file exists
-// and behaves as if the table were empty when it does not, so the published source contains no
+// and behaves as if the table were empty when it does not, so the published source carries no
 // third-party format knowledge and no reference to where any of it came from.
 function loadLocalNativeFormats() {
   const empty = { containers: {}, signatures: [], textExtensions: [] };
   try {
-    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "deps", "local", "native-formats.json");
+    // Deliberately outside the package: a table recovered on this machine belongs with this machine's
+    // library, not in the source tree, where it could be published by accident.
+    const file = path.join(libraryDir(), "native-formats.json");
     if (!fs.existsSync(file)) return empty;
     const data = JSON.parse(fs.readFileSync(file, "utf8"));
     return {
@@ -1676,6 +1678,16 @@ const LOCAL_NATIVE_FORMATS = loadLocalNativeFormats();
 const NATIVE_CONTAINER_FORMATS = LOCAL_NATIVE_FORMATS.containers;
 const NATIVE_SIGNATURES = LOCAL_NATIVE_FORMATS.signatures;
 const NATIVE_TEXT_EXTENSIONS = LOCAL_NATIVE_FORMATS.textExtensions;
+
+// Content probes: a handful of extensions are too generic for a magic (.map is claimed by engine
+// maps, symbol maps and colour ramps alike), so those are decided from the leading bytes read as
+// text. A probe that does not match falls through to the ordinary text heuristic: none of them
+// guesses, and a real signature always wins because this table is consulted after the magic tables.
+const CONTENT_PROBES = [
+  { ext: "map", test: /^\s*\[rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/, type: "other", format: "color-map", note: "colour ramp (rgb/rgba stops)" },
+  { ext: "vfpatch", test: /^\s*\{\s*"parameters"/, type: "audio", format: "voice-patch", note: "voice-processing patch (JSON parameter set)" },
+  { ext: "mms", test: /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\{/, type: "other", format: "meter-session", note: "meter session (block language)" },
+];
 const TEXT_EXTENSIONS = [
   // subtitle and playlist formats: their content is text, and the extension is the only
   // discriminator a small or truncated file offers.
