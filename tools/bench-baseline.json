@@ -1,0 +1,82 @@
+{
+  "measuredAt": "2026-10-15T16:22:45.471Z",
+  "note": "measured on an interactive development machine, not a quiet one: compare runs on the same machine and treat the absolute values as indicative, the ratios as the useful part",
+  "conditions": {
+    "platform": "win32 10.0.26200",
+    "cpu": "Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz",
+    "logicalCores": 12,
+    "totalMemoryGB": 15.9,
+    "node": "v24.20.0",
+    "threadsUsed": 12
+  },
+  "results": [
+    {
+      "name": "sniff: 1 MB png",
+      "iterations": 20,
+      "medianMs": 0.69,
+      "minMs": 0.49,
+      "note": ""
+    },
+    {
+      "name": "sniff: 160 KB text",
+      "iterations": 20,
+      "medianMs": 0.95,
+      "minMs": 0.7,
+      "note": ""
+    },
+    {
+      "name": "audio peaks: 10 s stereo wav",
+      "iterations": 10,
+      "medianMs": 24.53,
+      "minMs": 16.3,
+      "note": ""
+    },
+    {
+      "name": "audio sweep: 12 files, all cores",
+      "iterations": 3,
+      "medianMs": 36.54,
+      "minMs": 32.16,
+      "note": "threads=12"
+    },
+    {
+      "name": "score: 13 parts, 3527 notes",
+      "iterations": 10,
+      "medianMs": 2.86,
+      "minMs": 2.27,
+      "note": ""
+    },
+    {
+      "name": "query: 40 records, 1 hit",
+      "iterations": 20,
+      "medianMs": 0.62,
+      "minMs": 0.54,
+      "note": ""
+    },
+    {
+      "name": "index verify: 40 records, pooled",
+      "iterations": 5,
+      "medianMs": 23.16,
+      "minMs": 22.15,
+      "note": ""
+    },
+    {
+      "name": "sweep: 12 files, all cores (repeat)",
+      "iterations": 3,
+      "medianMs": 40.97,
+      "minMs": 23.3,
+      "note": ""
+    },
+    {
+      "name": "sweep: 12 files, one core",
+      "iterations": 3,
+      "medianMs": 132.77,
+      "minMs": 104.24,
+      "note": ""
+    }
+  ],
+  "ratios": {
+    "poolSpeedupOnSweep": 3.24,
+    "poolOneCoreMs": 132.77,
+    "poolAllCoresMs": 40.97
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "kohane-index-desuno",
+  "version": "0.1.0",
+  "description": "Cross-harness interop Library: MCP server + CLI to record, index and search files, tools, environments, knowledge and work records across workspaces, with a self-extending file-format library.",
+  "type": "module",
+  "main": "mcp/index.mjs",
+  "bin": {
+    "kohane-index-desuno": "./cli/index.mjs",
+    "kohane-index-desuno-mcp": "./mcp/index.mjs"
+  },
+  "mcp": {
+    "server": {
+      "command": "kohane-index-desuno-mcp",
+      "args": []
+    }
+  },
+  "files": [
+    "lib",
+    "mcp",
+    "cli",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "selfcheck": "node ../tools/selfcheck.mjs",
+    "check": "node ../tools/check-unicode.mjs && node ../tools/check-consistency.mjs && node ../tools/check-portability.mjs && node ../tools/check-isolation.mjs && node ../tools/check-contract.mjs && node ../tools/check-deps.mjs",
+    "verify": "npm run check && npm run selfcheck",
+    "bench": "node ../tools/bench.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "library",
+    "knowledge-base",
+    "cross-harness",
+    "interop"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nesarf/kohane-index-desuno.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Nesarf/kohane-index-desuno/issues"
+  },
+  "homepage": "https://github.com/Nesarf/kohane-index-desuno#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,24 @@
+# Line endings are an invariant here, not a preference: check-unicode fails any shipped file that
+# contains a carriage return. Git's default behaviour on Windows (converting LF to CRLF on checkout)
+# would therefore make a fresh clone fail its own checks, so the repository keeps LF everywhere.
+* text=auto eol=lf
+
+# Binary assets must never be touched
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.avi binary
+*.mp4 binary
+*.mkv binary
+*.ogg binary
+*.mid binary
+*.flp binary
+*.dll binary
+*.exe binary
+*.sf2 binary
+*.ztdw binary

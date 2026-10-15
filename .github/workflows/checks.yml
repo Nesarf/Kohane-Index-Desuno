@@ -1,0 +1,49 @@
+# 检查族 + 自检：任何一次推送或 PR 都要过
+#
+# 运行在 Windows 上是有意的：自检会把库建在磁盘守护约定的临时根下，并用真实的路径语义跑文件用例。
+# 临时根由 KOHANE_HARNESS_TMP 指定（默认 E:\DaShaoHuo\cache\tmp），CI 上指向 runner 自己的临时目录，
+# 这样同一套自检在本机与流水线上跑的是同一份代码。
+name: checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: install engine dependencies
+        working-directory: kohane-index-desuno
+        run: npm install --no-audit --no-fund
+
+      - name: invariants (unicode / consistency / portability / isolation / contract)
+        working-directory: kohane-index-desuno
+        env:
+          KOHANE_HARNESS_TMP: ${{ runner.temp }}\kohane-harness
+        run: npm run check
+
+      - name: end-to-end self-check
+        working-directory: kohane-index-desuno
+        env:
+          KOHANE_HARNESS_TMP: ${{ runner.temp }}\kohane-harness
+        run: npm run selfcheck
+
+      - name: the tool surface answers over MCP
+        working-directory: kohane-index-desuno
+        env:
+          KOHANE_HARNESS_TMP: ${{ runner.temp }}\kohane-harness
+        shell: pwsh
+        run: |
+          $tools = (node cli/index.mjs library_audio --op info | ConvertFrom-Json)
+          if (-not $tools.ok) { throw "library_audio did not answer" }
+          Write-Host "engine answered; tools available:"
+          node -e "import('./lib/core.mjs').then(m=>console.log(m.TOOLS.length))"

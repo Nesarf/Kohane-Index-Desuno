@@ -1,0 +1,1714 @@
+{
+  "scannedAt": "2026-09-10T19:38:12.819Z",
+  "roots": [
+    "vst3-a",
+    "vst3-m",
+    "clap-m",
+    "vst2-a"
+  ],
+  "total": 104,
+  "byKind": {
+    "clap": 9,
+    "standalone": 2,
+    "vst2": 42,
+    "vst3": 51
+  },
+  "rows": [
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Audio-Server.clap",
+      "name": "MiniMeters - Audio-Server.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Server"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Loudness.clap",
+      "name": "MiniMeters - Loudness.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Loudness"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Oscilloscope.clap",
+      "name": "MiniMeters - Oscilloscope.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Oscilloscope"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Spectrogram.clap",
+      "name": "MiniMeters - Spectrogram.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Spectrogram"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Spectrum.clap",
+      "name": "MiniMeters - Spectrum.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Spectrum"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Stereometer.clap",
+      "name": "MiniMeters - Stereometer.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Stereometer"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - VU.clap",
+      "name": "MiniMeters - VU.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "VU"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters - Waveform.clap",
+      "name": "MiniMeters - Waveform.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Waveform"
+      ]
+    },
+    {
+      "root": "clap-m",
+      "kind": "clap",
+      "file": "C:/Program Files/Common Files/CLAP/MiniMeters/MiniMeters.clap",
+      "name": "MiniMeters.clap",
+      "mb": 9.67,
+      "arch": "x64",
+      "abi": [
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": []
+    },
+    {
+      "root": "standalone",
+      "kind": "standalone",
+      "file": "C:/Program Files/iZotope/Ozone 9/win64/iZotope Ozone 9.exe",
+      "name": "iZotope Ozone 9.exe",
+      "mb": 44.67,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9",
+      "words": []
+    },
+    {
+      "root": "standalone",
+      "kind": "standalone",
+      "file": "C:/Program Files/MiniMeters/MiniMeters.exe",
+      "name": "MiniMeters.exe",
+      "mb": 9.65,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Insight 2.dll",
+      "name": "Insight 2.dll",
+      "mb": 5.45,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "main"
+      ],
+      "version": "2.5.0.49",
+      "product": "Insight 2",
+      "words": [
+        "Insight"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZInsight2.dll",
+      "name": "iZInsight2.dll",
+      "mb": 62.61,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.5.0.49",
+      "product": "Insight 2",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZNectar3.dll",
+      "name": "iZNectar3.dll",
+      "mb": 68.04,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "3.6.0.1039",
+      "product": "Nectar 3",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9.dll",
+      "name": "iZOzone9.dll",
+      "mb": 42.31,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9DynamicEQ.dll",
+      "name": "iZOzone9DynamicEQ.dll",
+      "mb": 34.4,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Dynamic EQ",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9Dynamics.dll",
+      "name": "iZOzone9Dynamics.dll",
+      "mb": 34.43,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Dynamics",
+      "words": [
+        "Dynamics"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9Equalizer.dll",
+      "name": "iZOzone9Equalizer.dll",
+      "mb": 34.55,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Equalizer",
+      "words": [
+        "Equalizer"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9Exciter.dll",
+      "name": "iZOzone9Exciter.dll",
+      "mb": 34.1,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Exciter",
+      "words": [
+        "Exciter"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9Imager.dll",
+      "name": "iZOzone9Imager.dll",
+      "mb": 33.98,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Imager",
+      "words": [
+        "Imager"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9LowEndFocus.dll",
+      "name": "iZOzone9LowEndFocus.dll",
+      "mb": 33.2,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Low End Focus",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9MasterRebalance.dll",
+      "name": "iZOzone9MasterRebalance.dll",
+      "mb": 32.94,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Master Rebalance",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9MatchEQ.dll",
+      "name": "iZOzone9MatchEQ.dll",
+      "mb": 33.98,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Match EQ",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9Maximizer.dll",
+      "name": "iZOzone9Maximizer.dll",
+      "mb": 33.51,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Maximizer",
+      "words": [
+        "Maximizer"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9SpectralShaper.dll",
+      "name": "iZOzone9SpectralShaper.dll",
+      "mb": 33.41,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Spectral Shaper",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9VintageCompressor.dll",
+      "name": "iZOzone9VintageCompressor.dll",
+      "mb": 33.91,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Compressor",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9VintageEQ.dll",
+      "name": "iZOzone9VintageEQ.dll",
+      "mb": 33.23,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage EQ",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9VintageLimiter.dll",
+      "name": "iZOzone9VintageLimiter.dll",
+      "mb": 33.34,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Limiter",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZOzone9VintageTape.dll",
+      "name": "iZOzone9VintageTape.dll",
+      "mb": 32.82,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Tape",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZRelay.dll",
+      "name": "iZRelay.dll",
+      "mb": 32.27,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "1.0.4.689",
+      "product": "iZotope Relay",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZRX8BreathControl.dll",
+      "name": "iZRX8BreathControl.dll",
+      "mb": 35.76,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "8.1.0.544",
+      "product": "RX 8 Breath Control",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZTonalBalanceControl2.dll",
+      "name": "iZTonalBalanceControl2.dll",
+      "mb": 24.32,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.1.0.507",
+      "product": "Tonal Balance Control 2",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/iZVocalSynth2.dll",
+      "name": "iZVocalSynth2.dll",
+      "mb": 53.68,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.2.0.339",
+      "product": "VocalSynth 2",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Nectar 3.dll",
+      "name": "Nectar 3.dll",
+      "mb": 4.94,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "3.6.0.1039",
+      "product": "Nectar 3",
+      "words": [
+        "Nectar"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Dynamic EQ.dll",
+      "name": "Ozone 9 Dynamic EQ.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Dynamic EQ"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Dynamics.dll",
+      "name": "Ozone 9 Dynamics.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Dynamics"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Equalizer.dll",
+      "name": "Ozone 9 Equalizer.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Equalizer"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Exciter.dll",
+      "name": "Ozone 9 Exciter.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Exciter"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Imager.dll",
+      "name": "Ozone 9 Imager.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Imager"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Low End Focus.dll",
+      "name": "Ozone 9 Low End Focus.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Low End Focus"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Master Rebalance.dll",
+      "name": "Ozone 9 Master Rebalance.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Master Rebalance"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Match EQ.dll",
+      "name": "Ozone 9 Match EQ.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Match EQ"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Maximizer.dll",
+      "name": "Ozone 9 Maximizer.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Maximizer"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Spectral Shaper.dll",
+      "name": "Ozone 9 Spectral Shaper.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Spectral Shaper"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Vintage Compressor.dll",
+      "name": "Ozone 9 Vintage Compressor.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Compressor"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Vintage EQ.dll",
+      "name": "Ozone 9 Vintage EQ.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage EQ"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Vintage Limiter.dll",
+      "name": "Ozone 9 Vintage Limiter.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Limiter"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9 Vintage Tape.dll",
+      "name": "Ozone 9 Vintage Tape.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Tape"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Ozone 9.dll",
+      "name": "Ozone 9.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": []
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Relay.dll",
+      "name": "Relay.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "1.0.4.689",
+      "product": "iZotope Relay",
+      "words": [
+        "Relay"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/RX 8 Breath Control.dll",
+      "name": "RX 8 Breath Control.dll",
+      "mb": 4.64,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "8.1.0.544",
+      "product": "RX 8 Breath Control",
+      "words": [
+        "Breath Control"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/Tonal Balance Control 2.dll",
+      "name": "Tonal Balance Control 2.dll",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "2.1.0.507",
+      "product": "Tonal Balance Control (Hook)",
+      "words": [
+        "Control"
+      ]
+    },
+    {
+      "root": "vst2-a",
+      "kind": "vst2",
+      "file": "C:/Program Files/Steinberg/VstPlugins/iZotope/VocalSynth 2.dll",
+      "name": "VocalSynth 2.dll",
+      "mb": 3.95,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "2.2.0.339",
+      "product": "VocalSynth 2",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Insight 2.vst3",
+      "name": "Insight 2.vst3",
+      "mb": 1.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "2.5.0.49",
+      "product": "Insight 2",
+      "words": [
+        "Insight"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZInsight2.dll",
+      "name": "iZInsight2.dll",
+      "mb": 62.61,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.5.0.49",
+      "product": "Insight 2",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZNectar3.dll",
+      "name": "iZNectar3.dll",
+      "mb": 68.04,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "3.6.0.1039",
+      "product": "Nectar 3",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9.dll",
+      "name": "iZOzone9.dll",
+      "mb": 42.31,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9DynamicEQ.dll",
+      "name": "iZOzone9DynamicEQ.dll",
+      "mb": 34.4,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Dynamic EQ",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9Dynamics.dll",
+      "name": "iZOzone9Dynamics.dll",
+      "mb": 34.43,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Dynamics",
+      "words": [
+        "Dynamics"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9Equalizer.dll",
+      "name": "iZOzone9Equalizer.dll",
+      "mb": 34.55,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Equalizer",
+      "words": [
+        "Equalizer"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9Exciter.dll",
+      "name": "iZOzone9Exciter.dll",
+      "mb": 34.1,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Exciter",
+      "words": [
+        "Exciter"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9Imager.dll",
+      "name": "iZOzone9Imager.dll",
+      "mb": 33.98,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Imager",
+      "words": [
+        "Imager"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9LowEndFocus.dll",
+      "name": "iZOzone9LowEndFocus.dll",
+      "mb": 33.2,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Low End Focus",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9MasterRebalance.dll",
+      "name": "iZOzone9MasterRebalance.dll",
+      "mb": 32.94,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Master Rebalance",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9MatchEQ.dll",
+      "name": "iZOzone9MatchEQ.dll",
+      "mb": 33.98,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Match EQ",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9Maximizer.dll",
+      "name": "iZOzone9Maximizer.dll",
+      "mb": 33.51,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Maximizer",
+      "words": [
+        "Maximizer"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9SpectralShaper.dll",
+      "name": "iZOzone9SpectralShaper.dll",
+      "mb": 33.41,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Spectral Shaper",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9VintageCompressor.dll",
+      "name": "iZOzone9VintageCompressor.dll",
+      "mb": 33.91,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Compressor",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9VintageEQ.dll",
+      "name": "iZOzone9VintageEQ.dll",
+      "mb": 33.23,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage EQ",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9VintageLimiter.dll",
+      "name": "iZOzone9VintageLimiter.dll",
+      "mb": 33.34,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Limiter",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZOzone9VintageTape.dll",
+      "name": "iZOzone9VintageTape.dll",
+      "mb": 32.82,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone 9 Vintage Tape",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZRelay.dll",
+      "name": "iZRelay.dll",
+      "mb": 32.27,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "1.0.4.689",
+      "product": "iZotope Relay",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZRX8BreathControl.dll",
+      "name": "iZRX8BreathControl.dll",
+      "mb": 35.76,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "8.1.0.544",
+      "product": "RX 8 Breath Control",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZTonalBalanceControl2.dll",
+      "name": "iZTonalBalanceControl2.dll",
+      "mb": 24.32,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.1.0.507",
+      "product": "Tonal Balance Control 2",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/iZVocalSynth2.dll",
+      "name": "iZVocalSynth2.dll",
+      "mb": 53.68,
+      "arch": "x64",
+      "abi": [
+        "main"
+      ],
+      "version": "2.2.0.339",
+      "product": "VocalSynth 2",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Nectar 3.vst3",
+      "name": "Nectar 3.vst3",
+      "mb": 4.94,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "3.6.0.1039",
+      "product": "Nectar 3",
+      "words": [
+        "Nectar"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Dynamic EQ.vst3",
+      "name": "Ozone 9 Dynamic EQ.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Dynamic EQ"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Dynamics.vst3",
+      "name": "Ozone 9 Dynamics.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Dynamics"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Equalizer.vst3",
+      "name": "Ozone 9 Equalizer.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Equalizer"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Exciter.vst3",
+      "name": "Ozone 9 Exciter.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Exciter"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Imager.vst3",
+      "name": "Ozone 9 Imager.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Imager"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Low End Focus.vst3",
+      "name": "Ozone 9 Low End Focus.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Low End Focus"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Master Rebalance.vst3",
+      "name": "Ozone 9 Master Rebalance.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Master Rebalance"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Match EQ.vst3",
+      "name": "Ozone 9 Match EQ.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Match EQ"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Maximizer.vst3",
+      "name": "Ozone 9 Maximizer.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Maximizer"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Spectral Shaper.vst3",
+      "name": "Ozone 9 Spectral Shaper.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Spectral Shaper"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Vintage Compressor.vst3",
+      "name": "Ozone 9 Vintage Compressor.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Compressor"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Vintage EQ.vst3",
+      "name": "Ozone 9 Vintage EQ.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage EQ"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Vintage Limiter.vst3",
+      "name": "Ozone 9 Vintage Limiter.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Limiter"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9 Vintage Tape.vst3",
+      "name": "Ozone 9 Vintage Tape.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": [
+        "Vintage Tape"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Ozone 9.vst3",
+      "name": "Ozone 9.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "9.1.0.1530",
+      "product": "Ozone (Hook)",
+      "words": []
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Relay.vst3",
+      "name": "Relay.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "1.0.4.689",
+      "product": "iZotope Relay",
+      "words": [
+        "Relay"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/RX 8 Breath Control.vst3",
+      "name": "RX 8 Breath Control.vst3",
+      "mb": 4.64,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "8.1.0.544",
+      "product": "RX 8 Breath Control",
+      "words": [
+        "Breath Control"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/Tonal Balance Control 2.vst3",
+      "name": "Tonal Balance Control 2.vst3",
+      "mb": 2.99,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "2.1.0.507",
+      "product": "Tonal Balance Control (Hook)",
+      "words": [
+        "Control"
+      ]
+    },
+    {
+      "root": "vst3-a",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/iZotope/VocalSynth 2.vst3",
+      "name": "VocalSynth 2.vst3",
+      "mb": 3.95,
+      "arch": "x64",
+      "abi": [
+        "VSTPluginMain",
+        "GetPluginFactory",
+        "main"
+      ],
+      "version": "2.2.0.339",
+      "product": "VocalSynth 2",
+      "words": []
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Audio-Server.vst3",
+      "name": "MiniMeters - Audio-Server.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Server"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Loudness.vst3",
+      "name": "MiniMeters - Loudness.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Loudness"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Oscilloscope.vst3",
+      "name": "MiniMeters - Oscilloscope.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Oscilloscope"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Spectrogram.vst3",
+      "name": "MiniMeters - Spectrogram.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Spectrogram"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Spectrum.vst3",
+      "name": "MiniMeters - Spectrum.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Spectrum"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Stereometer.vst3",
+      "name": "MiniMeters - Stereometer.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Stereometer"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - VU.vst3",
+      "name": "MiniMeters - VU.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "VU"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters - Waveform.vst3",
+      "name": "MiniMeters - Waveform.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": [
+        "Waveform"
+      ]
+    },
+    {
+      "root": "vst3-m",
+      "kind": "vst3",
+      "file": "C:/Program Files/Common Files/VST3/MiniMeters/MiniMeters.vst3",
+      "name": "MiniMeters.vst3",
+      "mb": 9.97,
+      "arch": "x64",
+      "abi": [
+        "GetPluginFactory",
+        "clap_entry",
+        "main"
+      ],
+      "version": null,
+      "product": null,
+      "words": []
+    }
+  ]
+}

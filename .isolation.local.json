@@ -1,0 +1,5 @@
+{
+  "sibling": "E:\\mega-index-map",
+  "note": "Local, unshipped declaration for tools/check-isolation.mjs: the sibling build may be read (tables compared, proofread) but never written, and this checkout must never be written by the sibling either. Declared here so no shipped file has to name a machine-specific path.",
+  "declaredAt": "2026-09-11"
+}

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs: the workstation's compiled tree is ~187 MB and is rebuilt by build.ps1
+bin/
+obj/
+workstation/src/**/bin/
+workstation/src/**/obj/
+*.user
+*.suo
+.vs/
+
+# Local data: the workstation keeps an isolated library whose records hold real paths from this machine
+workstation/data/
+
+# Packaging artefacts
+*.tgz
+*.nupkg
+
+# Scratch and backups
+*.bak
+*.bak-*
+*.tmp
+kohane-stage.wav
+
+# Reverse-engineering evidence: the FL work produced both design conclusions and per-format internals,
+# and the samples folder is 165 MB of third-party material. Neither belongs in a public repository.
+# The design documents (research/notes) are kept, since the architecture cites them.
+research/fl-studio/
+
+# Downloaded or borrowed tools: recorded in deps/manifest.json, never committed
+deps/downloads/

@@ -1,0 +1,318 @@
+<Window
+    x:Class="KohaneStation.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+      Layout notes, after looking at the real CrystalDiskInfo (8.3.2, Shizuku Edition):
+        * two labelled status boxes whose value sits in a sunken field - its 健康状態 / 温度;
+        * a dense property table in two columns, labels grey and values right where numbers line up;
+        * an attribute list whose first column is a state dot, with numbers right-aligned.
+      What is deliberately NOT copied is its full-height character panel: here she lives in the header
+      and changes face with the file's state, which is the same trick (the character reports the
+      status) without giving away half the window to a portrait.
+    -->
+    <Grid Background="{StaticResource PaperBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ===================== header ===================== -->
+        <Grid Padding="20,14,20,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+            <!-- Her face IS the status light: the pose is chosen by the file's working-tree state. -->
+            <Border
+                x:Name="AvatarBox"
+                Width="86" Height="86"
+                CornerRadius="14"
+                BorderBrush="{StaticResource KohaneCrimsonBrush}"
+                BorderThickness="2"
+                VerticalAlignment="Center">
+                <Border.Background>
+                    <ImageBrush ImageSource="Assets/kohane-q-sleepy.png" Stretch="Uniform" />
+                </Border.Background>
+            </Border>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock
+                    Text="kohane-index-desuno 工作站"
+                    FontSize="21"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource KohaneCrimsonDeepBrush}" />
+                <TextBlock
+                    x:Name="MoodLine"
+                    Text="図鑑はまだ空っぽだよ"
+                    FontSize="12.5"
+                    Foreground="{StaticResource KohaneCrimsonBrush}" />
+                <TextBlock
+                    Text="小一孁こはね · 湯の岡寮 · カピラ"
+                    FontSize="11"
+                    Foreground="{StaticResource KohaneAmberDeepBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4" HorizontalAlignment="Right">
+                <Border
+                    x:Name="EngineChip"
+                    Padding="10,5"
+                    CornerRadius="12"
+                    Background="{StaticResource VerdictIdleWashBrush}"
+                    HorizontalAlignment="Right">
+                    <TextBlock
+                        x:Name="EngineStatus"
+                        Text="引擎: 未连接"
+                        FontSize="11.5"
+                        FontFamily="{StaticResource DataFont}"
+                        Foreground="{StaticResource VerdictIdleBrush}" />
+                </Border>
+                <Border
+                    x:Name="RepoChip"
+                    Padding="10,5"
+                    CornerRadius="12"
+                    Background="{StaticResource KohaneNavyWashBrush}"
+                    HorizontalAlignment="Right">
+                    <TextBlock
+                        x:Name="RepoStatus"
+                        Text="仓库: —"
+                        FontSize="11.5"
+                        FontFamily="{StaticResource DataFont}"
+                        Foreground="{StaticResource KohaneNavyBrush}" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Rectangle Grid.Row="0" Style="{StaticResource FrameRule}" Margin="20,0,20,0" VerticalAlignment="Bottom" />
+
+        <!-- ===================== body ===================== -->
+        <Grid Grid.Row="1" Padding="20,14,20,12" ColumnDefinitions="1.05*,1*" ColumnSpacing="14">
+
+            <!-- LEFT: instant analyzer -->
+            <Border x:Name="AnalyzerCard" Style="{StaticResource StationCard}">
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="即刻分析" Style="{StaticResource CardTitle}" />
+                        <Rectangle Style="{StaticResource FrameRule}" HorizontalAlignment="Left" Width="54" Height="2" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                        <TextBox
+                            x:Name="PathBox"
+                            PlaceholderText="文件路径 — 或直接把文件拖到此处"
+                            FontFamily="{StaticResource DataFont}"
+                            FontSize="12.5" />
+                        <Button x:Name="BrowseBtn" Grid.Column="1" Content="浏览…" Click="OnBrowseClick" />
+                        <Button x:Name="AnalyzeBtn" Grid.Column="2" Content="识读" Style="{StaticResource CrimsonButton}" Click="OnAnalyzeClick" />
+                    </Grid>
+
+                    <!-- two labelled status boxes, the DiskInfo way: the value sits sunken -->
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Border Style="{StaticResource StatusBox}">
+                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="状态" Style="{StaticResource StatusBoxLabel}" />
+                                    <TextBlock x:Name="VerdictMark" Grid.Column="1" Text="—" Style="{StaticResource StatusBoxMark}" />
+                                </Grid>
+                                <Border Grid.Row="1" Style="{StaticResource SunkenField}">
+                                    <TextBlock x:Name="VerdictText" Text="等待取件" Style="{StaticResource SunkenValue}" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1" Style="{StaticResource StatusBox}">
+                            <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="格式" Style="{StaticResource StatusBoxLabel}" />
+                                    <TextBlock x:Name="VcsBadge" Grid.Column="1" Text="—" Style="{StaticResource StatusBoxMark}" />
+                                </Grid>
+                                <Border Grid.Row="1" Style="{StaticResource SunkenField}">
+                                    <TextBlock x:Name="VerdictFormat" Text="—" Style="{StaticResource SunkenValue}" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- property table, two columns the way DiskInfo lays out a drive -->
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
+                            <ItemsControl x:Name="PropList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="96,*">
+                                            <TextBlock Text="{Binding Label}" Style="{StaticResource PropLabelTight}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Text="{Binding Value}"
+                                                Style="{StaticResource PropValueTight}"
+                                                IsTextSelectionEnabled="True"
+                                                ToolTipService.ToolTip="{Binding Value}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl x:Name="PropList2" Grid.Column="1">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnDefinitions="96,*">
+                                            <TextBlock Text="{Binding Label}" Style="{StaticResource PropLabelTight}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Text="{Binding Value}"
+                                                Style="{StaticResource PropValueTight}"
+                                                IsTextSelectionEnabled="True"
+                                                ToolTipService.ToolTip="{Binding Value}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="RecordBtn"
+                            Content="写入 Library"
+                            Click="OnRecordClick"
+                            Visibility="Collapsed"
+                            Background="{StaticResource KohaneAmberBrush}"
+                            Foreground="{StaticResource InkBrush}"
+                            BorderBrush="{StaticResource KohaneAmberDeepBrush}" />
+                        <TextBlock
+                            x:Name="AnalyzerHint"
+                            Text="识别后可将此条写入图鉴"
+                            Style="{StaticResource HintText}"
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- RIGHT: the library workbench, with the capability directory beside it -->
+            <Border Grid.Column="1" Style="{StaticResource StationCard}">
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="図鑑 / 索引" Style="{StaticResource CardTitle}" />
+                            <Rectangle Style="{StaticResource FrameRule}" HorizontalAlignment="Left" Width="54" Height="2" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Top">
+                            <Button x:Name="LibraryTab" Content="図鑑" Click="OnShowLibraryClick" Style="{StaticResource TabOnButton}" />
+                            <Button x:Name="WaterfallTab" Content="瀑布" Click="OnShowWaterfallClick" Style="{StaticResource TabOffButton}"
+                    VerticalAlignment="Top" />
+                <Button x:Name="CapabilityTab" Content="能力" Click="OnShowCapabilityClick" Style="{StaticResource TabOffButton}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- view C: the falling-note waterfall (filled from code so the control needs no xmlns mapping) -->
+            <Grid x:Name="WaterfallHost" Grid.Row="1" Grid.RowSpan="3" Visibility="Collapsed" Margin="0,10,0,0" />
+
+            <!-- view A: the library index -->
+                    <Grid x:Name="LibraryView" Grid.Row="1" Grid.RowSpan="3" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <TextBox
+                                x:Name="SearchBox"
+                                PlaceholderText="检索… (name / description / tag)"
+                                KeyDown="OnSearchKeyDown"
+                                FontSize="12.5" />
+                            <Button Grid.Column="1" Content="检索" Click="OnSearchClick" />
+                        </Grid>
+
+                        <!-- attribute header, in her sailor navy; first column is the state dot -->
+                        <Border Grid.Row="1" Background="{StaticResource KohaneNavyBrush}" CornerRadius="4" Padding="10,5">
+                            <Grid ColumnDefinitions="62,62,*,132">
+                                <TextBlock Text="状态" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Grid.Column="1" Text="类型" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Grid.Column="2" Text="名称" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Grid.Column="3" Text="来源" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
+                            </Grid>
+                        </Border>
+
+                        <ListView
+                            x:Name="ResultsList"
+                            Grid.Row="2"
+                            SelectionMode="Single"
+                            Background="Transparent"
+                            BorderThickness="0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="62,62,*,132" Padding="0,3">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
+                                            <TextBlock
+                                                Text="{Binding StatusLetter}"
+                                                FontFamily="{StaticResource DataFont}"
+                                                FontSize="12.5"
+                                                FontWeight="SemiBold"
+                                                Foreground="{Binding StatusBrush}"
+                                                VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding Kind}" Style="{StaticResource DataText}" Foreground="{StaticResource KohaneCrimsonBrush}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Name}" Style="{StaticResource DataText}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Source}" Style="{StaticResource DataText}" Foreground="{StaticResource InkSoftBrush}" HorizontalAlignment="Right" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <TextBlock x:Name="IndexStatus" Grid.Row="3" Text="图鉴为空 — 先识读并写入，或运行检索" Style="{StaticResource HintText}" />
+                    </Grid>
+
+                    <!-- view B: kohane's own capability directory (one family: Kohane Bassline) -->
+                    <Grid x:Name="CapabilityView" Grid.Row="1" Grid.RowSpan="3" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10" Visibility="Collapsed">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <TextBox
+                                x:Name="CapabilitySearch"
+                                PlaceholderText="检索能力… (名称 / 角色)"
+                                KeyDown="OnCapabilityKeyDown"
+                                FontSize="12.5" />
+                            <Button Grid.Column="1" Content="刷新" Click="OnCapabilityRefreshClick" />
+                        </Grid>
+
+                        <Border Grid.Row="1" Background="{StaticResource KohaneNavyBrush}" CornerRadius="4" Padding="10,5">
+                            <Grid ColumnDefinitions="*,132,72">
+                                <TextBlock Text="能力（Kohane Bassline）" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Grid.Column="1" Text="角色" Style="{StaticResource ColumnHeader}" />
+                                <TextBlock Grid.Column="2" Text="挂接" Style="{StaticResource ColumnHeader}" HorizontalAlignment="Right" />
+                            </Grid>
+                        </Border>
+
+                        <ListView
+                            x:Name="CapabilityList"
+                            Grid.Row="2"
+                            SelectionMode="Single"
+                            Background="Transparent"
+                            BorderThickness="0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="*,132,72" Padding="0,3">
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource DataText}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Role}" Style="{StaticResource DataText}" Foreground="{StaticResource InkSoftBrush}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Link}" Style="{StaticResource DataText}" Foreground="{StaticResource KohaneAmberDeepBrush}" HorizontalAlignment="Right" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <TextBlock x:Name="CapabilityStatus" Grid.Row="3" Text="尚未读取能力目录" Style="{StaticResource HintText}" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===================== footer ===================== -->
+        <Grid Grid.Row="2" Padding="20,0,20,12" ColumnDefinitions="*,Auto">
+            <TextBlock
+                Text="湯の岡學寮都市カピラ · kohane-index-desuno 引擎（复用 MCP 工具层）经由 本机 HTTP 桥接"
+                Style="{StaticResource HintText}" />
+            <TextBlock
+                Grid.Column="1"
+                x:Name="FooterNote"
+                Text="山丹"
+                FontSize="11.5"
+                Foreground="{StaticResource KohaneCrimsonBrush}" />
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,154 @@
+{
+  "manifestVersion": 1,
+  "note": "KID's own dependency layer. The engine's core is pure Node: everything it needs beyond the standard library appears here, with an identity, a licence and a hash. A hash mismatch is a failure, not a warning.",
+  "rules": [
+    "the engine runs with zero UNLISTED dependencies",
+    "every entry declares kind, origin, licence, bytes and sha256 before it is used",
+    "a listed file whose hash differs is a failure until either the file is restored or the entry is updated deliberately",
+    "nothing is fetched at runtime: a dependency is obtained by an explicit, recorded step, never as a side effect"
+  ],
+  "runtime": {
+    "node": ">=18"
+  },
+  "entries": [
+    {
+      "id": "mcp-sdk",
+      "kind": "library",
+      "name": "@modelcontextprotocol/sdk",
+      "origin": "npm registry (declared in package.json dependencies)",
+      "licence": "MIT",
+      "purpose": "the MCP stdio server surface; the CLI and the core do not need it",
+      "usedBy": [
+        "mcp/index.mjs"
+      ],
+      "file": null,
+      "sha256": null,
+      "bytes": null,
+      "note": "installed by the package manager from the declared range, so it is pinned by lockfile rather than by hash here"
+    },
+    {
+      "id": "decoder-flac",
+      "kind": "decoder",
+      "name": "kohane flac reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read FLAC metadata blocks and STREAMINFO and locate the first frame; decoding subframes to samples is the next stage",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=info)"
+      ],
+      "file": "deps/decoders/flac.mjs",
+      "sha256": "cb2f6316d8b35cd243e2882191329f442dd816e21d8782f96b5fb7f632f3afc3",
+      "bytes": 8302,
+      "note": "verified against a real 150 MB master: 48 kHz, stereo, 24 bit, 30,543,355 samples, 636.32 s - matching the duration recorded independently | hash updated deliberately on 2026-10-15: the module gained its own capabilities declaration"
+    },
+    {
+      "id": "decoder-matroska",
+      "kind": "decoder",
+      "name": "kohane matroska reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read Matroska/WebM container metadata: duration, timecode scale, and each track's type, codec id, video size and audio rate/channels/bit depth",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=info)",
+        "deps/media-registry.mjs"
+      ],
+      "file": "deps/decoders/matroska.mjs",
+      "sha256": "e77c305a1c99e046bc9f2f36009bf8838cc198390fbf8211b078cb9ce559c2d9",
+      "bytes": 9336,
+      "note": "verified against a synthesised stream whose values were chosen in advance; elementary streams are not decoded"
+    },
+    {
+      "id": "decoder-isobmff",
+      "kind": "decoder",
+      "name": "kohane isobmff reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read MP4/MOV/M4A/3GP container metadata: movie timescale and duration, each track's handler, codec four-character code, pixel size and audio rate/channels",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=info)",
+        "deps/media-registry.mjs"
+      ],
+      "file": "deps/decoders/isobmff.mjs",
+      "sha256": "d85299b8c8c4318adb470f5e88ade3f4b3107340d60c28b153a9015758b012ef",
+      "bytes": 7007,
+      "note": "verified against a synthesised file whose values were chosen in advance (3.000 s, avc1 1920x1080, mp4a 48 kHz stereo); samples are not decoded"
+    },
+    {
+      "id": "decoder-ogg",
+      "kind": "decoder",
+      "name": "kohane ogg reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "walk an Ogg page chain and identify what each logical stream carries (Vorbis, Opus, FLAC-in-Ogg, Theora, Skeleton, Speex) with its stated rate and channel count",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=info)",
+        "deps/media-registry.mjs"
+      ],
+      "file": "deps/decoders/ogg.mjs",
+      "sha256": "f50b2fc9b0b1e75e5b5d2ee114c8e23dc9d5e7c4f22fce80abbf3d9784485609",
+      "bytes": 5317,
+      "note": "verified against a two-stream synthesised chain; packet payloads are located but not decoded, and page CRCs are not verified"
+    },
+    {
+      "id": "decoder-riff",
+      "kind": "decoder",
+      "name": "kohane riff reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read RIFF containers: AVI frame timing, size and per-stream headers, and WAVE format and data sizes",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=info)",
+        "deps/media-registry.mjs"
+      ],
+      "file": "deps/decoders/riff.mjs",
+      "sha256": "efa85e3b4fe439e266567e9fa07b330ec888ab735d8c43d7df8f8ec9b2a36cb6",
+      "bytes": 6054,
+      "note": "verified against a synthesised AVI (1280x720, 25 fps, 250 frames, two streams) and WAVE (44.1 kHz stereo 16 bit, 1 s); AVI elementary streams are not decoded"
+    },
+    {
+      "id": "encoder-flac",
+      "kind": "decoder",
+      "name": "kohane flac writer",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "write a FLAC stream: marker, STREAMINFO with the MD5 of the raw PCM, a Vorbis comment carrying the kohane vendor string, and frames with constant, verbatim or fixed-predictor subframes",
+      "usedBy": [
+        "deps/media-registry.mjs (encode capability)"
+      ],
+      "file": "deps/decoders/flac-encoder.mjs",
+      "sha256": "06bb50c9055caf4e0f191465a613a2528d332bccf0261080ac8e77f61b2cb663",
+      "bytes": 12846,
+      "note": "verified by round trip: the project's own reader reads the stream back, the declared MD5 equals the MD5 of the source PCM, and every decoded sample equals the source sample | hash updated deliberately on 2026-10-15: fixed predictors gained orders 3 and 4 and partitioning gained orders 1 and 2 (the test file went 32877 -> 16028 -> 10573 bytes, and ffmpeg decodes the result byte-identically to the source)"
+    },
+    {
+      "id": "external-ffmpeg",
+      "kind": "binary",
+      "name": "ffmpeg (external decoder, borrowed)",
+      "origin": "D:/ffmpeg-8.1.1-essentials_build/bin/ffmpeg.exe",
+      "licence": "as distributed by this build (the essentials build ships GPL components; confirm before redistributing)",
+      "purpose": "decode the compressed families KID does not implement itself (MPEG audio, AAC, Vorbis/Opus in practice, and the audio of video containers) into raw PCM",
+      "usedBy": [
+        "deps/external.mjs (library_audio op=pcm/play/export)"
+      ],
+      "file": null,
+      "path": "D:/ffmpeg-8.1.1-essentials_build/bin/ffmpeg.exe",
+      "sha256": "228d7a8556258de907fdb55f36850078ebc7680b84ec30d84ea02e99bec1d1eb",
+      "bytes": 101457920,
+      "note": "not shipped with KID: it is borrowed where it exists and looked up from KOHANE_FFMPEG first, then from this recorded path; when neither resolves, the engine says so instead of failing silently"
+    }
+  ],
+  "planned": [
+    {
+      "id": "decoder-flac",
+      "kind": "decoder",
+      "purpose": "decode FLAC to samples, so op=pcm and op=play cover a lossless compressed family",
+      "state": "reader and writer both in place, with fixed predictors and Rice coding; higher orders, stereo decorrelation and finer partitioning remain"
+    },
+    {
+      "id": "decoder-mp3",
+      "kind": "decoder",
+      "purpose": "decode MPEG audio to samples",
+      "state": "not yet chosen"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WaterfallView - the falling-note panel.
+
+  Kept deliberately free of StaticResource lookups: a missing theme key is a XAML parse failure at
+  runtime, and this control should be liftable into any window. The colours below are the theme's own
+  values (paper, crimson, ink, navy) written out.
+-->
+<UserControl
+    x:Class="KohaneStation.WaterfallView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+
+    <Grid Background="#F8F8F0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- header: what is loaded, and the transport -->
+        <Grid Grid.Row="0" Padding="8,6,8,6" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ScoreLine" Grid.Column="0" FontSize="12" Foreground="#2B2018"
+                       Text="瀑布 · 载入一份乐谱后开始下落" TextTrimming="CharacterEllipsis" />
+            <Button x:Name="PlayButton" Grid.Column="1" Content="落下" FontSize="12" Click="OnPlayClick" />
+            <Button x:Name="RewindButton" Grid.Column="2" Content="回到开头" FontSize="12" Click="OnRewindClick" />
+        </Grid>
+
+        <!-- the surface: a bitmap the renderer writes into, pixel by pixel -->
+        <Border Grid.Row="1" Margin="8,0,8,0" BorderBrush="#303848" BorderThickness="1" Background="#1E1A16">
+            <Image x:Name="Surface" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        </Border>
+
+        <!-- footer: the playhead and the scale legend -->
+        <Grid Grid.Row="2" Padding="8,6,8,8" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="PositionLine" Grid.Column="0" FontSize="11" Foreground="#685040" Text="—" />
+            <TextBlock x:Name="ScaleLine" Grid.Column="1" FontSize="11" Foreground="#685040" Text="—" />
+        </Grid>
+    </Grid>
+</UserControl>

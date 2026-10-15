@@ -1,0 +1,41 @@
+{
+  "at": "2026-10-12T09:45:30.319Z",
+  "shipped": {
+    "kohane-index-desuno\\LICENSE": "d00de0e937d088bd",
+    "kohane-index-desuno\\README.md": "64d78cfe40890883",
+    "kohane-index-desuno\\cli\\index.mjs": "c0d05a1c5cc35863",
+    "kohane-index-desuno\\lib\\core.mjs": "b04ddb645ec95121",
+    "kohane-index-desuno\\mcp\\index.mjs": "3f2bdd68babc238f",
+    "kohane-index-desuno\\package.json": "65ceba9ab3d0f68f"
+  },
+  "sibling": {
+    "path": "E:\\mega-index-map",
+    "files": {
+      ".gitattributes": "1d2ffbc50c2c53b0",
+      ".github\\ISSUE_TEMPLATE\\format-report.md": "2a333e182d76d508",
+      ".github\\workflows\\publish.yml": "1df00ec9929b7835",
+      ".gitignore": "d7f85a96b97d22c0",
+      ".isolation.local.json": "e71bfa5a19faa102",
+      "bench\\baseline.json": "486cf43f58f10e9c",
+      "cordis.patch.yml": "33295d7cac791b82",
+      "ISOLATION.md": "dbda1138e026af90",
+      "lib\\index.js": "c1464a45a2e9c6dd",
+      "LICENSE": "e3579a106e01e680",
+      "package.json": "4f59e26cc4361588",
+      "PROOFREADING.md": "efcc594b50712485",
+      "README.md": "8368c7ea43f36701",
+      "README.zh-CN.md": "8e1d74efc808fcb7",
+      "scripts\\bench.mjs": "7912f39b90cdf5cf",
+      "scripts\\check-ascii.mjs": "5b35171db69a8e29",
+      "scripts\\check-consistency.mjs": "c183307731f61217",
+      "scripts\\check-isolation.mjs": "a26eed094b458d9b",
+      "scripts\\check-portability.mjs": "ca209b4f3846b641",
+      "scripts\\selfcheck.mjs": "7f1dc2dd11b03f87",
+      "skills\\mega-index\\SKILL.md": "19fe5283970172b3"
+    }
+  },
+  "library": {
+    "file": "E:\\dsh-home\\library\\index.json",
+    "hash": "76c3b9ec3f3386d4"
+  }
+}

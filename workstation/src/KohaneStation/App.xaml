@@ -1,0 +1,206 @@
+<Application
+    x:Class="KohaneStation.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- ==================================================================
+                 湯の岡 paper theme
+                 Every colour below is sampled from Kohane's own portrait:
+                   paper #F8F8F0 (the sheet she is drawn on)
+                   crimson #A82830 (her halo, and the frame around the drawing)
+                   hair brown #685040 / #403028 (the ink)
+                   sailor navy #303848 (the data headers)
+                   blush #E09088, skin #F8E8E0 (hover and soft fills)
+                 The layout takes its cues from CrystalDiskInfo: a coloured verdict
+                 band, one big readout, a dense two-column property table and a
+                 monospace attribute list.
+                 ================================================================== -->
+
+            <!-- paper and ink (the paper keeps a whisper of Mica showing through) -->
+            <SolidColorBrush x:Key="PaperBrush" Color="#F4F8F8F0" />
+            <SolidColorBrush x:Key="CardBrush" Color="#FFFCFCF7" />
+            <SolidColorBrush x:Key="CardStrokeBrush" Color="#FFE3DACB" />
+            <SolidColorBrush x:Key="HairlineBrush" Color="#FFD8CDB9" />
+            <SolidColorBrush x:Key="InkBrush" Color="#FF2B2018" />
+            <SolidColorBrush x:Key="InkSoftBrush" Color="#FF6B5A48" />
+            <SolidColorBrush x:Key="LabelBrush" Color="#FF8A7A66" />
+
+            <!-- her crimson: accent, frame, verdict band -->
+            <SolidColorBrush x:Key="KohaneCrimsonBrush" Color="#FFA82830" />
+            <SolidColorBrush x:Key="KohaneCrimsonDeepBrush" Color="#FF7E1D24" />
+            <SolidColorBrush x:Key="KohaneCrimsonWashBrush" Color="#FFF3E2E2" />
+
+            <!-- sailor navy: data headers -->
+            <SolidColorBrush x:Key="KohaneNavyBrush" Color="#FF303848" />
+            <SolidColorBrush x:Key="KohaneNavyWashBrush" Color="#FFE9EBF0" />
+
+            <!-- the amber in her name, kept for the one accent action -->
+            <SolidColorBrush x:Key="KohaneAmberBrush" Color="#FFE8A33D" />
+            <SolidColorBrush x:Key="KohaneAmberDeepBrush" Color="#FFC9821B" />
+            <SolidColorBrush x:Key="KohaneBlushBrush" Color="#FFE09088" />
+            <SolidColorBrush x:Key="KohaneRowBrush" Color="#FFF7F3EA" />
+
+            <!-- verdict colours (CrystalDiskInfo's good / caution / bad) -->
+            <SolidColorBrush x:Key="VerdictGoodBrush" Color="#FF2E7D4F" />
+            <SolidColorBrush x:Key="VerdictGoodWashBrush" Color="#FFE3F0E7" />
+            <SolidColorBrush x:Key="VerdictWarnBrush" Color="#FFC08A1E" />
+            <SolidColorBrush x:Key="VerdictWarnWashBrush" Color="#FFFAF0DA" />
+            <SolidColorBrush x:Key="VerdictBadBrush" Color="#FFA82830" />
+            <SolidColorBrush x:Key="VerdictBadWashBrush" Color="#FFF6E3E4" />
+            <SolidColorBrush x:Key="VerdictIdleBrush" Color="#FF8A7A66" />
+            <SolidColorBrush x:Key="VerdictIdleWashBrush" Color="#FFF1EDE4" />
+
+            <FontFamily x:Key="DataFont">Consolas, Cascadia Mono, Courier New</FontFamily>
+
+            <!-- ==================== styles ==================== -->
+
+            <Style x:Key="StationCard" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource CardBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="18,14,18,16" />
+            </Style>
+
+            <Style x:Key="CardTitle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource KohaneCrimsonDeepBrush}" />
+            </Style>
+
+            <!-- the thin crimson rule that echoes the frame around her portrait -->
+            <Style x:Key="FrameRule" TargetType="Rectangle">
+                <Setter Property="Fill" Value="{StaticResource KohaneCrimsonBrush}" />
+                <Setter Property="Height" Value="3" />
+                <Setter Property="RadiusX" Value="1.5" />
+                <Setter Property="RadiusY" Value="1.5" />
+            </Style>
+
+            <!-- property table: label on the left, value on the right, one row each -->
+            <Style x:Key="PropLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{StaticResource LabelBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,3,12,3" />
+            </Style>
+
+            <Style x:Key="PropValue" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                <Setter Property="Margin" Value="0,3,0,3" />
+            </Style>
+
+            <Style x:Key="DataText" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            </Style>
+
+            <Style x:Key="ColumnHeader" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <!-- a labelled status box whose value sits in a sunken field: CrystalDiskInfo's shape -->
+            <Style x:Key="StatusBox" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource KohaneRowBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardStrokeBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="10,7" />
+            </Style>
+
+            <Style x:Key="StatusBoxLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Foreground" Value="{StaticResource LabelBrush}" />
+            </Style>
+
+            <Style x:Key="StatusBoxMark" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+                <Setter Property="Foreground" Value="{StaticResource VerdictIdleBrush}" />
+            </Style>
+
+            <Style x:Key="SunkenField" TargetType="Border">
+                <Setter Property="Background" Value="#FFF1ECE2" />
+                <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="Padding" Value="8,3" />
+            </Style>
+
+            <Style x:Key="SunkenValue" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            </Style>
+
+            <!-- the pair of view tabs on the right card -->
+            <Style x:Key="TabOnButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource KohaneCrimsonBrush}" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CornerRadius" Value="4,0,0,4" />
+                <Setter Property="Padding" Value="14,5" />
+                <Setter Property="FontSize" Value="12" />
+            </Style>
+
+            <Style x:Key="TabOffButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource KohaneNavyWashBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource KohaneNavyBrush}" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CornerRadius" Value="0,4,4,0" />
+                <Setter Property="Padding" Value="14,5" />
+                <Setter Property="FontSize" Value="12" />
+            </Style>
+
+            <Style x:Key="HintText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="Foreground" Value="{StaticResource LabelBrush}" />
+            </Style>
+
+            <!-- her crimson as the primary action colour, instead of the system accent blue -->
+            <Style x:Key="CrimsonButton" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource KohaneCrimsonBrush}" />
+                <Setter Property="Foreground" Value="White" />
+                <Setter Property="BorderBrush" Value="{StaticResource KohaneCrimsonDeepBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="Padding" Value="14,6" />
+            </Style>
+
+            <!-- property table, two columns like DiskInfo's drive information block -->
+            <Style x:Key="PropLabelTight" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="Foreground" Value="{StaticResource LabelBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,2.5,10,2.5" />
+            </Style>
+
+            <Style x:Key="PropValueTight" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                <Setter Property="Margin" Value="0,2.5,0,2.5" />
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

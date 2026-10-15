@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>KohaneStation</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- her portrait as the app icon (see Assets/kohane.ico) -->
+    <ApplicationIcon>Assets\kohane.ico</ApplicationIcon>
+    <Platforms>x64;x86;ARM64</Platforms>
+    <Platform>x64</Platform>
+    <RuntimeIdentifiers>win-x64;win-x86;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Amber / Kohane accent (湯の岡, coral lily) as the app-wide brand color. -->
+    <ApplicationHighContrastTheme>false</ApplicationHighContrastTheme>
+
+    <!-- No Windows App Runtime is installed system-wide on this machine, so the runtime travels with
+         the app: the build copies Microsoft.WindowsAppRuntime and the XAML engine next to the exe,
+         and the workstation then starts straight from its own bin folder - no MSIX identity, no
+         administrator install. -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.250108004" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- persona art used by the shell (cropped from Kohane's own portrait) -->
+    <Content Include="Assets\**" />
+  </ItemGroup>
+
+</Project>
