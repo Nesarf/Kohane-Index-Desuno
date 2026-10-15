@@ -38,3 +38,14 @@ deps/downloads/
 # The local task list names in-flight reverse-engineering work; the published tree carries the
 # engine, the checks, the shell and the art, not the evidence chain behind them.
 TODO.md
+
+# Unity's generated tree: hundreds of megabytes of import cache, and package payloads that exceed a
+# forge's file size limit. The project is a folder of scripts plus ProjectSettings, and Unity rebuilds
+# everything under here on first open.
+workstation-unity/Library/
+workstation-unity/Temp/
+workstation-unity/obj/
+workstation-unity/Build/
+workstation-unity/build/
+workstation-unity/Logs/
+workstation-unity/UserSettings/

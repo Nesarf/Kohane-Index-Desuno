@@ -1,0 +1,9 @@
+kohane-index-desuno
+===================
+
+Portions of this project are derived from the mega-index-map project (MIT).
+That project is a read-only reference for this one: nothing here imports from it, writes to it, or is
+overwritten by it, and the cross-check that keeps that true lives in tools/reference-check.mjs.
+
+The licence text itself is the verbatim MIT licence; attribution notes live here rather than inside it,
+because a forge identifies a licence by matching its text exactly.
