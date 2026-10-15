@@ -1,7 +1,7 @@
 # 参与开发（CONTRIBUTING）
 
 本仓库是**工作区**：交付包在 `kohane-index-desuno/`，检查器在 `tools/`，桌面壳在 `workstation/`，
-研究笔记在 `research/`。改动前先读 `README.md` 与 `ARCHITECTURE.md`。
+研究笔记在 `the local evidence area/` (local, not published)。改动前先读 `README.md` 与 `ARCHITECTURE.md`。
 
 ---
 

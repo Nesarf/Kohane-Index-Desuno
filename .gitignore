@@ -27,7 +27,11 @@ kohane-stage.wav
 # Reverse-engineering evidence: the FL work produced both design conclusions and per-format internals,
 # and the samples folder is 165 MB of third-party material. Neither belongs in a public repository.
 # The design documents (research/notes) are kept, since the architecture cites them.
-research/fl-studio/
+research/
 
 # Downloaded or borrowed tools: recorded in deps/manifest.json, never committed
 deps/downloads/
+
+# The local task list names in-flight reverse-engineering work; the published tree carries the
+# engine, the checks, the shell and the art, not the evidence chain behind them.
+TODO.md

@@ -16,9 +16,9 @@
 | `kohane-index-desuno/` | **交付包**：引擎核心 + MCP 服务 + CLI（唯一要发布的东西） |
 | `tools/` | **检查器族**：不变量与契约的自动化核对（不随包发布） |
 | `workstation/` | **WinUI 桌面壳**（集成工作站），经本地 HTTP 桥接使用引擎 |
-| `research/` | **证据与研究笔记**：格式逆向、宿主调研、设计稿（含厂商名，是证据链） |
+| `the local evidence area/` (local, not published) | **证据与研究笔记**：格式逆向、宿主调研、设计稿（含厂商名，是证据链） |
 | `kohane!!!/` | **persona 美术**：立绘与表情素材 |
-| `TODO.md` | 待办与当前基线 |
+| the local task list (not published) | 待办与当前基线 |
 | `.isolation.local.json` | 与兄弟项目（只读参考源）的隔离声明 |
 
 ## 2. 三件产品
@@ -84,11 +84,11 @@ npm run verify      # = npm run check + npm run selfcheck
 ## 7. 路线
 
 - **当前**：把本体收干净——顶层文档（本文）、发布元数据、安装验证、CI、契约与不变量已就位
-- **下一步**：`TODO.md` 里的未结项（工作区状态能力的界面深化、能力目录的个人化、发布环节）
+- **下一步**：the local task list (not published) 里的未结项（工作区状态能力的界面深化、能力目录的个人化、发布环节）
 - **规划中的追加能力**：**KPB（Kohane Processing Bundle）**——作编混作为 KID 的**封存式 DLC**：
   单独下载、装上生效、卸下复原，**离开 KID 打不开**；内部一律 kohane 自己的容器
   （`.kbb/.kbi/.kba/.kbs/.kbm/.kbw/.kbv`，体积窗口 800 MB–2 GB）。详见
-  `research/notes/2026-10-15-kpb-design.md`。
+  `the local design notes (kept outside the published tree)`。
 
 ## 8. 许可
 

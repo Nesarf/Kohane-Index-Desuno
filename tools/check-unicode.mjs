@@ -13,7 +13,7 @@
 // a drift towards or away from a language is visible instead of silent.
 //
 // Scope is the SHIPPED package (lib/, mcp/, cli/, README.md, LICENSE, package.json). Everything
-// outside it - research/ (evidence notes), tools/ (harnesses), TODO.md, workstation/ - is a working
+// outside it - the local evidence area (not published) (evidence notes), tools/ (harnesses), TODO.md, workstation/ - is a working
 // document rather than the product.
 //
 // Usage: node tools/check-unicode.mjs        (exit 1 on any finding)
