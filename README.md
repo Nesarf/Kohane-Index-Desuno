@@ -90,7 +90,7 @@ npm run verify      # = npm run check + npm run selfcheck
   （`.kbb/.kbi/.kba/.kbs/.kbm/.kbw/.kbv`，体积窗口 800 MB–2 GB）。详见
   `the local design notes (kept outside the published tree)`。
 
-## 8. 许可
+- **CZGD·PL-1.0**（チーズ牛丼パブリックライセンス）· See [LICENSE](LICENSE).
 
 **CZGD·PL-1.0**（チーズ牛丼パブリックライセンス / Cheese Gyudon Public Licence）——见仓库根的 `LICENSE`。
 
