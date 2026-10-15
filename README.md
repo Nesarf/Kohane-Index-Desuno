@@ -1,5 +1,7 @@
 # kohane-index-desuno（KID）
 
+![Licence: CZGD·PL-1.0](https://img.shields.io/badge/licence-CZGD%C2%B7PL--1.0-c0392b)
+
 > 一台**跨 harness 的文件与知识索引引擎**：把「这是什么文件」「这台机器有什么能力」「以前记过什么」
 > 收进同一个库，让任何宿主（本机 harness、MCP 客户端、命令行、桌面壳）都问同一套逻辑。
 >
