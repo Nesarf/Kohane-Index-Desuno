@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "selfcheck": "node ../tools/selfcheck.mjs",
-    "check": "node ../tools/check-unicode.mjs && node ../tools/check-consistency.mjs && node ../tools/check-portability.mjs && node ../tools/check-isolation.mjs && node ../tools/check-contract.mjs && node ../tools/check-deps.mjs",
+    "check": "node ../tools/check-unicode.mjs && node ../tools/check-consistency.mjs && node ../tools/check-portability.mjs && node ../tools/check-isolation.mjs && node ../tools/check-contract.mjs && node ../tools/check-deps.mjs && node ../tools/check-runtimes.mjs",
     "verify": "npm run check && npm run selfcheck",
     "bench": "node ../tools/bench.mjs"
   },

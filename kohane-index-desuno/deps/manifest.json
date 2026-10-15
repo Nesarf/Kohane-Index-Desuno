@@ -135,6 +135,21 @@
       "sha256": "228d7a8556258de907fdb55f36850078ebc7680b84ec30d84ea02e99bec1d1eb",
       "bytes": 101457920,
       "note": "not shipped with KID: it is borrowed where it exists and looked up from KOHANE_FFMPEG first, then from this recorded path; when neither resolves, the engine says so instead of failing silently"
+    },
+    {
+      "id": "reader-unity-asset",
+      "kind": "decoder",
+      "name": "kohane unity asset reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read a Unity scene, prefab, asset or .meta file: the document stream, class ids, object names, GUID references and the meta guid with its importer",
+      "usedBy": [
+        "lib/core.mjs (analyze_object, the unity-asset provider)"
+      ],
+      "file": "deps/decoders/unity-asset.mjs",
+      "sha256": "98a42016eed3f803e69d7f361970ad4071acf48a1d1f741647153a67c1269b42",
+      "bytes": 5001,
+      "note": "verified against a synthesised scene (ten documents, two guids, one prefab instance) and a synthesised .meta; the format is Unity's own documented YAML, not something recovered from a binary"
     }
   ],
   "planned": [

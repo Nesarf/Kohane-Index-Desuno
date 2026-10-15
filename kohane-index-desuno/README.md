@@ -34,6 +34,7 @@ node tools/selfcheck.mjs          # behaviour regression harness (tool registry,
 node tools/check-unicode.mjs      # shipped files are valid UTF-8 Unicode: any script, no broken text
 node tools/check-contract.mjs     # every tool is the shape it advertises; unknown ops are refused
 node tools/check-deps.mjs         # every dependency is declared, licensed and hashed; no unlisted import
+node tools/check-runtimes.mjs     # only the built-ins that Node, Deno and Bun all provide; anything else resolves
 node tools/bench.mjs              # measures the engine and records the machine's conditions beside the numbers
 node tools/check-consistency.mjs  # README vs tool registry, schema op lists vs dispatch, self-claims
 node tools/check-portability.mjs  # no Windows-only assumptions, no shell strings, scratch off the system drive

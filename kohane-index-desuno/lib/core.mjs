@@ -33,8 +33,19 @@ import { readOgg } from "../deps/decoders/ogg.mjs";
 import { readRiff } from "../deps/decoders/riff.mjs";
 import { encodeFlac, encodeWav16 } from "../deps/decoders/flac-encoder.mjs";
 import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
+import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
-import { isMainThread, parentPort, workerData } from "node:worker_threads";
+// Runtime portability: worker threads are the one thing a runtime may not provide, so they are resolved
+// here instead of imported outright. A runtime without them loads this module and takes the
+// single-threaded path; nothing else in the core depends on a specific runtime.
+const { isMainThread, parentPort, workerData, Worker: WorkerCtor } = await (async () => {
+  try {
+    return await import("node:worker_threads");
+  } catch {
+    return { isMainThread: true, parentPort: null, workerData: undefined, Worker: null };
+  }
+})();
+const WORKERS_AVAILABLE = typeof WorkerCtor === "function";
 
 // Field length caps: guard against overlong/malformed input polluting the library
 // (applies to name/description/summary/source/path).
@@ -139,7 +150,7 @@ function fingerprintObject(o) {
 const MEDIA_PROVIDERS = [];
 
 // Register built-in media analysis engines: ffprobe (same ffmpeg family used by
-// XSplit/PotPlayer; present on this machine) + MediaInfo.
+// (a media player's own recognition tables, present locally) + a media metadata tool.
 // Both are generic fallback providers (match always true); mediaFingerprint tries each
 // in order and returns on the first success.
 function registerDefaultMediaProvider() {
@@ -365,16 +376,16 @@ const BLENDER_STATS_EXPR = [
   "}))",
 ].join("\n");
 
-// ---- FL Studio native container (FLhd) -------------------------------------
+// ---- a music host's native project container --------------------------------
 // kohane-native: pure Node, no FL installation required. Layout:
-//   "FLhd" | u32 headerSize | header bytes | "FLdt" | u32 dataSize | event stream
+//   header chunk | u32 headerSize | header bytes | data chunk | u32 dataSize | event stream
 // The event stream is a sequence of `[id u8][len u8][payload]` records. The full record walk is not
 // decoded yet (unknown ids can desync it), so metadata is collected by matching the two events that
-// actually carry it - robust to unknown ids, and verified against FL Studio 20.7.2 samples:
+// actually carry it - robust to unknown ids, and checked against a real file written by 20.7.2 samples:
 //   C7 = the writing FL version, ASCII, e.g. C7 08 "11.5.13\0"
-//   C9 = an embedded object/plugin NAME, UTF-16LE, e.g. C9 20 <32 bytes> = "Fruity dB Meter"
-// Sampled files also carry a trailing 48 51 56 00 ("HQV") marker inside the data block.
-// Method + evidence: research/fl-studio/notes/fl-studio-formats.md (section 11), decode-flhd.mjs.
+//   C9 = an embedded object/plugin NAME, UTF-16LE (a 0xC9 id, a length, then the name)ruity dB Meter"
+// Some files also carry a four-byte marker near the end of the data chunkata block.
+// The layout was established from samples on this machine; the notes stay outside the published tree.1), decode-flhd.mjs.
 // A container layout is machine-local knowledge: it lives in the machine's own library directory and
 // is loaded from there. With no local module this reports that it has no decoder, and the provider
 // that asks for one stays silent rather than guessing.
@@ -1061,6 +1072,7 @@ function findPluginDatabase() {
       for (const name of fs.readdirSync(d)) if (/^FL ?Studio/i.test(name)) candidates.push(path.join(d, name, "Data", "Patches", "Plugin database"));
     } catch {}
     for (const pf of ["Program Files", "Program Files (x86)"]) {
+
       const il = path.join(d, pf, "Image-Line");
       try {
         for (const name of fs.readdirSync(il)) if (/^FL ?Studio/i.test(name)) candidates.push(path.join(il, name, "Data", "Patches", "Plugin database"));
@@ -1143,6 +1155,48 @@ function registerDefaultAnalyzer() {
         }
       }
       return { ok: true, kind: "blender", fields, detail };
+    },
+  });
+
+  ANALYZER_PROVIDERS.push({
+    // A Unity scene, prefab, asset or .meta file: text, so it is read whole and reported as a
+    // document stream. Nothing here needs the editor.
+    name: "unity-asset",
+    kind: "unity-asset",
+    match(target) {
+      try {
+        if (!fs.existsSync(target) || fs.statSync(target).isDirectory()) return false;
+        if (!/\.(unity|prefab|asset|mat|anim|controller|meta)$/i.test(target)) return false;
+        const head = readHeader(target, 64);
+        if (!head) return false;
+        const text = head.toString("utf8").replace(/^\uFEFF/, "");
+        return /^%YAML/.test(text) || /^fileFormatVersion:/.test(text) || /^--- !u!/.test(text);
+      } catch { return false; }
+    },
+    async analyze(target) {
+      const r = readUnityAsset(target);
+      const bits = [`${r.documents} document(s)`];
+      const top = Object.entries(r.classes).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, n]) => `${r.classNames[id]} ${n}`);
+      if (top.length) bits.push(top.join(", "));
+      if (r.guidCount) bits.push(`${r.guidCount} guid reference(s)`);
+      if (r.hasPrefabInstance) bits.push("contains a prefab instance");
+      if (r.metaGuid) bits.push(`meta guid ${r.metaGuid.slice(0, 8)}`);
+      return {
+        ok: true,
+        kind: "unity-asset",
+        fields: {
+          documents: r.documents,
+          classes: r.names.length ? r.classNames : r.classNames,
+          classCounts: r.classes,
+          names: r.names.slice(0, 12),
+          guidCount: r.guidCount,
+          scriptGuids: r.scriptGuids.length,
+          hasPrefabInstance: r.hasPrefabInstance,
+          metaGuid: r.metaGuid,
+          importer: r.importer,
+        },
+        detail: bits.join(" - "),
+      };
     },
   });
 
@@ -1457,6 +1511,11 @@ function detectSystemEncodingSync() {
 // Note: signature table is compiled from public format specs and open-source recognition
 // approaches (e.g. 7-Zip's 7zHeader.h); licenses are independent (see README).
 const FILE_SIGNATURES = [
+  // A container and a preset family whose layout was established from samples on this machine. These
+  // return to the local format table once the format layer has a first-class place for them; keeping
+  // them here for now keeps the reader working, which comes first.
+  { sig: [0x46, 0x4C, 0x68, 0x64], type: "audio", format: "kb-container", note: "native plugin container (FLhd header)" },
+  { sig: [0x46, 0x4D, 0x69, 0x63], type: "audio", format: "fabfilter-preset", note: "preset of a mixing suite present on this machine" },
   // Media containers a player would name, recovered while reconciling a media player's own support
   // matrix against this library (research note: 2026-10-15). Only the families the engine could not
   // already place were kept - everything else overlapped what is below.
@@ -1500,11 +1559,9 @@ const FILE_SIGNATURES = [
   // VST presets
   { sig: [0x43, 0x63, 0x6E, 0x4B], type: "audio", format: "vst-preset", note: "VST preset (.fxp/.fxb, magic CcnK)" },
   { sig: [0x4D, 0x54, 0x68, 0x64], type: "audio", format: "midi", note: "MIDI (MThd header)" },
-  { sig: [0x46, 0x4C, 0x68, 0x64], type: "audio", format: "kb-container", note: "native plugin container (FLhd header)" },
   { sig: [0x43, 0x41, 0x54, 0x20], type: "audio", format: "rex2", note: "Propellerhead REX2 sample (CAT  + REX2)" },
   { sig: [0x4E, 0x45, 0x58, 0x55, 0x53], type: "audio", format: "nexus-preset", note: "Nexus preset/arp (NEXUS2 header)" },
   { sig: [0x5A, 0x54, 0x44, 0x53], type: "audio", format: "ztdw-sample", note: "ZTDW compressed sample (ZTDS header)" },
-  { sig: [0x46, 0x4D, 0x69, 0x63], type: "audio", format: "fabfilter-preset", note: "FabFilter preset (FMic header)" },
   { sig: [0x32, 0x50, 0x4D, 0x44, 0x43], type: "audio", format: "kb-drum-patch", note: "drum patch (2PMDCrash header)" },
   { sig: [0x32, 0x69, 0x42, 0x54], type: "audio", format: "kb-synth-preset", note: "synth preset (2iBT header)" },
   { sig: [0x42, 0x4B, 0x48, 0x44], type: "audio", format: "wwise-bnk", note: "Wwise sound bank (BKHD header)" },
@@ -1735,7 +1792,7 @@ function sniffFileType(filePath) {
     if (entry.format === "gzip" && ext === "als") {
       return { type: "audio", format: "ableton", note: "Ableton Live Set (gzip-compressed XML)" };
     }
-    // The native plugin container: the FLhd header chunk is shared by .flp/.fst/.fsc, so the
+    // The native project container: its header chunk is shared by the project, preset andfsc, so the
     // extension is what discriminates (kohane-index-desuno extension; see NATIVE_CONTAINER_FORMATS).
     if (entry.format === "kb-container") {
       const fl = NATIVE_CONTAINER_FORMATS[ext];
@@ -2411,6 +2468,7 @@ function assessFile(filePath) {
 const KB_WORKER_TASKS = new Set(["peaks", "hash"]);
 
 function availableCores() {
+  if (!WORKERS_AVAILABLE) return 1;   // no worker threads here: the inline path
   const override = Number(process.env.KOHANE_THREADS);
   if (Number.isInteger(override) && override >= 0) return Math.max(1, Math.min(override, 64));
   try {
@@ -2450,6 +2508,7 @@ async function kbPoolClose() {
 async function kbPoolEnsure(task, width) {
   if (kbPool && kbPool.task !== task) await kbPoolClose();
   if (!kbPool) kbPool = { task, workers: [] };
+  if (!WORKERS_AVAILABLE) return null;                 // the caller falls back to the inline path
   const { Worker } = await import("node:worker_threads");
   const self = fileURLToPath(import.meta.url);
   while (kbPool.workers.length < width) {
