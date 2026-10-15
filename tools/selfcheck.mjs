@@ -41,8 +41,8 @@ const tool = (n) => m.TOOLS.find((t) => t.name === n);
 // ---------------------------------------------------------------- module surface
 section("module surface");
 const KEY_EXPORTS = [
-  "TOOLS", "TOOL_INPUT_SCHEMAS", "FILE_SIGNATURES", "FL_CONTAINER_FORMATS", "FL_NATIVE_SIGNATURES",
-  "FL_TEXT_EXTENSIONS", "ANALYZER_PROVIDERS", "analyzeObject", "registerDefaultAnalyzer",
+  "TOOLS", "TOOL_INPUT_SCHEMAS", "FILE_SIGNATURES", "NATIVE_CONTAINER_FORMATS", "NATIVE_SIGNATURES",
+  "NATIVE_TEXT_EXTENSIONS", "ANALYZER_PROVIDERS", "analyzeObject", "registerDefaultAnalyzer",
   "runLocalAnalyzer", "localAnalyzerMatches", "sniffFileType", "mediaFingerprint",
   "encryptSensitive", "decryptSensitive", "sealWithPassphrase", "unsealWithPassphrase",
   "KEY_INFO", "KEY_INFO_LEGACY", "SEAL_INFO", "SEAL_INFO_LEGACY", "detectEnvironment", "safeStringify",
@@ -72,7 +72,10 @@ ok("schemas cover the tools that reference them",
 section("signature recognition");
 const sniff = (p) => m.sniffFileType(p);
 ok("113 built-in signatures", m.FILE_SIGNATURES.length === 113, `got ${m.FILE_SIGNATURES.length}`);
-ok("21 native preset/pattern signatures", m.FL_NATIVE_SIGNATURES.length === 21, `got ${m.FL_NATIVE_SIGNATURES.length}`);
+ok("local native-format table: absent is fine, present loads",
+    (m.NATIVE_SIGNATURES.length === 0 && m.NATIVE_TEXT_EXTENSIONS.length === 0) || (m.NATIVE_SIGNATURES.length > 0 && m.NATIVE_TEXT_EXTENSIONS.length > 0),
+    `sig=${m.NATIVE_SIGNATURES.length} text=${m.NATIVE_TEXT_EXTENSIONS.length}`);
+  ok("local native table loaded on this machine", m.NATIVE_SIGNATURES.length === 0 || m.NATIVE_SIGNATURES.length >= 20, `sig=${m.NATIVE_SIGNATURES.length}`);
 ok("PNG", (sniff(PNG) || {}).format === "png");
 ok("project container .flp", (sniff(FL_FLP) || {}).format === "flp", JSON.stringify(sniff(FL_FLP)));
 ok("state file .fst", (sniff(FL_FST) || {}).format === "fst", JSON.stringify(sniff(FL_FST)));

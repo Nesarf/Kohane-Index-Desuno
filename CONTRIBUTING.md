@@ -19,7 +19,7 @@ npm run verify      # = npm run check（五道不变量）+ npm run selfcheck（
 | `check-unicode` | 文本坏了：替换字符、孤立代理项、BOM、杂控制字符、回车 |
 | `check-consistency` | 说法与做法不一致：文档列了没注册的工具、op 说了不做、库里有网络调用或调试输出 |
 | `check-portability` | 只写了一边的平台分支 |
-| `check-isolation` | 交付包引用了兄弟项目、把厂商名带进输出 |
+| `check-isolation` | 交付包引用了外部参考源、把厂商名带进输出 |
 | `check-contract` | 工具名不副实：键集敞开、未知 op 照做、只读探针不应答 |
 | `selfcheck` | 行为回归（256 项断言） |
 
@@ -41,7 +41,7 @@ npm run verify      # = npm run check（五道不变量）+ npm run selfcheck（
 - **路径用时再解析**：本机的 D:/F:/G: 是虚拟分区，盘符会在会话之间变化；不要把绝对路径记进下一步。
 - **写前看 mtime**：本仓库可能被并发编辑，改文件前先看修改时间，改完留备份。
 - **临时脚本落文件**：在 PowerShell 里内联 `node -e` 极易被引号撕裂，写成 `.mjs` 再跑。
-- **兄弟项目只读**：`E:\mega-index-map` 是参考源，只读、可用于校对，**永不写回**。
+- **外部参考源只读**：本机另有一个同类索引项目，只在必要时充当校对源，**永不写回**（其位置声明在 `.isolation.local.json` 里）。
 
 ## 4. 隔离
 

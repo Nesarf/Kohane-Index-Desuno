@@ -33,7 +33,6 @@ workstation/                  WinUI 3 桌面壳
 
 the local evidence area/                     证据与设计（可提交，但不随包发布）
 ├─ notes/                     设计稿与调研（含 KPB 设计稿）
-└─ fl-studio/                 格式逆向、样本、工具
 ```
 
 **为什么核心是单文件**：跨 harness 复用时，「一个文件 + 零依赖」是最省事的形态；
@@ -146,5 +145,5 @@ HKDF 派生 + AES-256-GCM。敏感对象封存；**复审**是显式的：`clear
 | 界面 | 工作站余下观感、状态能力的界面深化 | 待做 |
 | **KPB** | 作编混作为**封存式 DLC**：`.kbb/.kbi/.kba/.kbs/.kbm/.kbw/.kbv`，体积窗口 800 MB–2 GB，离开 KID 打不开 | 设计稿已成，实现待排 |
 
-KPB 的两条硬约束（体积窗口、束内无第三方容器）与逆向范围，见
+KPB 的两条硬约束（体积比例、束内不用第三方容器）与素材转换范围，见
 `the local design notes (kept outside the published tree)`。

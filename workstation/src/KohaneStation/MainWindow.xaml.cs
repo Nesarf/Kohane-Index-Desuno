@@ -49,7 +49,7 @@ public sealed class CapRow
 
 /// <summary>
 /// Main window: a Kohane-index workstation. Left panel = instant file analyzer
-/// (DiskInfo-flavoured), right panel = DIY library/index workbench (Fruity-Wrapper
+/// (information-dense), right panel = the DIY library and index workbench (wrapper-style
 /// flavoured) with kohane's own capability directory beside it. Both talk to the pure-Node
 /// engine over a local HTTP bridge that reuses the kohane-index-desuno MCP tool layer.
 /// </summary>

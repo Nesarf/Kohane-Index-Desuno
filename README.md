@@ -16,7 +16,7 @@
 | `kohane-index-desuno/` | **交付包**：引擎核心 + MCP 服务 + CLI（唯一要发布的东西） |
 | `tools/` | **检查器族**：不变量与契约的自动化核对（不随包发布） |
 | `workstation/` | **WinUI 桌面壳**（集成工作站），经本地 HTTP 桥接使用引擎 |
-| `the local evidence area/` (local, not published) | **证据与研究笔记**：格式逆向、宿主调研、设计稿（含厂商名，是证据链） |
+| `research/` (local, not published) | **本地工作笔记与证据**：设计稿、调研记录。不随仓库发布 |
 | `kohane!!!/` | **persona 美术**：立绘与表情素材 |
 | the local task list (not published) | 待办与当前基线 |
 | `.isolation.local.json` | 与兄弟项目（只读参考源）的隔离声明 |

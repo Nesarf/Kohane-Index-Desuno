@@ -139,7 +139,7 @@ function fingerprintObject(o) {
 const MEDIA_PROVIDERS = [];
 
 // Register built-in media analysis engines: ffprobe (same ffmpeg family used by
-// XSplit/PotPlayer; present on this machine) + MediaInfo.
+// (a media player's own recognition tables) + a media metadata tool.
 // Both are generic fallback providers (match always true); mediaFingerprint tries each
 // in order and returns on the first success.
 function registerDefaultMediaProvider() {
@@ -365,9 +365,9 @@ const BLENDER_STATS_EXPR = [
   "}))",
 ].join("\n");
 
-// ---- FL Studio native container (FLhd) -------------------------------------
+// ---- a music host's native project container -------------------------------
 // kohane-native: pure Node, no FL installation required. Layout:
-//   "FLhd" | u32 headerSize | header bytes | "FLdt" | u32 dataSize | event stream
+//   header chunk | u32 headerSize | header bytes | data chunk | u32 dataSize | event stream
 // The event stream is a sequence of `[id u8][len u8][payload]` records. The full record walk is not
 // decoded yet (unknown ids can desync it), so metadata is collected by matching the two events that
 // actually carry it - robust to unknown ids, and verified against FL Studio 20.7.2 samples:
@@ -1651,72 +1651,31 @@ const ZIP_PACKAGE_FORMATS = {
   ilv: ["archive", "impulse-library package (ZIP-based)"],
 }
 
-// The native plugin container. The "FLhd" header chunk (payload in the following "FLdt" chunk) is
-// SHARED by project, preset and score/controller files, so the extension is the discriminator -
-// the same idea as ZIP_PACKAGE_FORMATS above. Signatures for .flp/.fst/.fsc verified byte-for-byte
-// against real samples (research/fl-studio); a kohane-index-desuno extension.
-// Wording follows the plugins' own file dialogs ("state file (*.fst)", "envelope state file").
-const FL_CONTAINER_FORMATS = {
-  flp: ["audio", "project file (FLhd/FLdt container)"],
-  fst: ["audio", "state file / plugin preset (FLhd/FLdt container)"],
-  fsc: ["audio", "score / controller file (FLhd/FLdt container)"],
+// Machine-local format knowledge. Some file families are recognised through a table that is recorded
+// locally rather than shipped, because the table was recovered from this machine's own files. The
+// engine carries only the mechanism: it loads deps/local/native-formats.json when that file exists
+// and behaves as if the table were empty when it does not, so the published source contains no
+// third-party format knowledge and no reference to where any of it came from.
+function loadLocalNativeFormats() {
+  const empty = { containers: {}, signatures: [], textExtensions: [] };
+  try {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "deps", "local", "native-formats.json");
+    if (!fs.existsSync(file)) return empty;
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    return {
+      containers: data.containers && typeof data.containers === "object" ? data.containers : {},
+      signatures: Array.isArray(data.signatures) ? data.signatures : [],
+      textExtensions: Array.isArray(data.textExtensions) ? data.textExtensions : [],
+    };
+  } catch {
+    return empty;
+  }
 }
 
-// kohane-index-desuno extension: magics of the native plugin preset/pattern formats, recovered
-// from real installation samples (research/fl-studio, not from any reference build).
-// Checked AFTER FILE_SIGNATURES so a built-in signature always wins.
-//
-// IMPORTANT: this family's convention is a VERSION/TAG byte followed by a 3-letter tag, and that
-// first byte is NOT stable - the drum kit appears as "2SMD"/"4SMD", one synth as "3nyS"/"4nyS" and
-// another as BOTH "2iBT" and "oiBT" (a letter, not a digit). So tag entries match the 3-letter tag
-// at offset 1 and leave head[0] free; the tag is the stable part of the identifier.
-// `at` = offset where the signature starts; `digit0` (optional) additionally requires head[0] to be
-// an ASCII digit, for any future entry where that holds.
-const FL_NATIVE_SIGNATURES = [
-  // Exact magics first: a full match must beat a shared 3-letter tag ("TPMD" contains "PMD" at
-  // offset 1, so the pattern entry has to be evaluated before the patch tag entry).
-  { at: 0, sig: [0x54, 0x50, 0x4d, 0x44], type: "audio", format: "kb-drum-pattern", note: "drum pattern (TPMD tag)" },
-  { at: 0, sig: [0x48, 0x45, 0x41, 0x44, 0x09, 0x00, 0x00, 0x00], type: "audio", format: "kb-mobile-preset", note: "mobile preset (HEAD chunk + DESC)" },
-  { at: 0, sig: [0x99, 0x46, 0x4c, 0x53, 0x0d, 0x0a, 0x1a, 0x0a], type: "audio", format: "kb-mobile-archive", note: "mobile container (99 46 4c 53 0d 0a 1a 0a)" },
-  // Then the "version byte + 3-letter tag" family (head[0] left free).
-  { at: 1, sig: [0x50, 0x4d, 0x44], type: "audio", format: "kb-drum-patch-tag", note: "drum patch (nPMD tag)" },
-  { at: 1, sig: [0x53, 0x4d, 0x44], type: "audio", format: "kb-drum-kit", note: "drum kit (nSMD tag)" },
-  { at: 1, sig: [0x69, 0x42, 0x54], type: "audio", format: "kb-synth-preset-ibt", note: "synth preset (niBT tag)" },
-  { at: 1, sig: [0x72, 0x6b, 0x53], type: "audio", format: "kb-synth-preset-rks", note: "synth preset (nrkS tag)" },
-  { at: 1, sig: [0x72, 0x77, 0x53], type: "audio", format: "kb-synth-preset-rws", note: "synth preset (nrwS tag)" },
-  { at: 1, sig: [0x6e, 0x79, 0x53], type: "audio", format: "kb-synth-preset-nys", note: "synth preset (nnyS tag)" },
-  { at: 1, sig: [0x6e, 0x68, 0x43], type: "audio", format: "kb-synth-preset-nhc", note: "synth preset (nnhC tag)" },
-  { at: 1, sig: [0x72, 0x6f, 0x4d], type: "audio", format: "kb-mobile-preset-rp", note: "mobile preset (roM/0RPM/0CVM/0HZM chunks)" },
-  // Second census pass (119 distinct extensions in the FL install): the remaining distinctive
-  // magics. Exact magics first, then the offset-matched ones.
-  { at: 0, sig: [0x44, 0x58, 0x42, 0x43], type: "other", format: "dxbc", note: "DirectX compiled shader bytecode (DXBC)" },
-  { at: 0, sig: [0x31, 0x52, 0x43, 0x48], type: "audio", format: "kb-program-preset", note: "program preset (1RCH)" },
-  { at: 0, sig: [0x44, 0x77, 0x50, 0x72], type: "audio", format: "kb-sample-program", note: "sample program (DwPr)" },
-  { at: 0, sig: [0x5a, 0x47, 0x4f, 0x4e, 0x5a, 0x49, 0x4f], type: "other", format: "kb-zge-object", note: "effect object (ZGONZIO)" },
-  { at: 0, sig: [0x31, 0x30, 0x4c, 0x46, 0x48, 0x45, 0x41, 0x44], type: "audio", format: "kb-mobile-container", note: "mobile container (10LFHEAD)" },
-  { at: 0, sig: [0x4c, 0x50, 0x4d, 0x54, 0x53, 0x4d, 0x50, 0x4c], type: "audio", format: "kb-project-template", note: "project template (LPMTSMPL)" },
-  { at: 0, sig: [0x37, 0x38, 0x34, 0x30, 0x53, 0x63, 0x6e, 0x53], type: "other", format: "nanopad-set", note: "Korg nanoPAD scene set (7840ScnS)" },
-  { at: 0, sig: [0x33, 0x00, 0x00, 0x00, 0x5a, 0x65, 0x72, 0x6f], type: "other", format: "zge-resource", note: "ZGameEditor resource (u32 3 + 'Zero')" },
-  { at: 1, sig: [0x6b, 0x69, 0x4b], type: "audio", format: "kb-drum-preset", note: "kick / drum preset (nkiK tag)" },
-  { at: 4, sig: [0x30, 0x47, 0x45, 0x4d], type: "audio", format: "kb-mod-envelope", note: "modulation envelope (0GEM at offset 4)" },
-]
-
-// kohane-index-desuno extension: text-based native formats, checked alongside TEXT_EXTENSIONS.
-// Safe because the text heuristic also verifies the bytes are printable, so a binary file claiming
-// one of these extensions is never mislabelled as text (.scr screensavers are executables and are
-// caught by the MZ signature first). The last two are the block-language session/preset formats
-// adopted from the metering and voice-processing suites (research/adopted-plugins).
-const FL_TEXT_EXTENSIONS = ["zgeproj", "zla", "scr", "edscript", "zco", "tpr", "tkp", "wti", "ncp", "flmapping", "groovepat", "scm", "mms", "vfpatch"]
-
-// Content probes: a handful of extensions are too generic for a magic (.map is claimed by engine
-// maps, symbol maps and colour ramps alike), so those are decided from the leading bytes read as
-// text. A probe that does not match falls through to the ordinary text heuristic: none of them
-// guesses, and a real signature always wins because this table is consulted after the magic tables.
-const CONTENT_PROBES = [
-  { ext: "map", test: /^\s*\[rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/, type: "other", format: "color-map", note: "colour ramp (rgb/rgba stops)" },
-  { ext: "vfpatch", test: /^\s*\{\s*"parameters"/, type: "audio", format: "voice-patch", note: "voice-processing patch (JSON parameter set)" },
-  { ext: "mms", test: /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\{/, type: "other", format: "meter-session", note: "meter session (block language)" },
-];
+const LOCAL_NATIVE_FORMATS = loadLocalNativeFormats();
+const NATIVE_CONTAINER_FORMATS = LOCAL_NATIVE_FORMATS.containers;
+const NATIVE_SIGNATURES = LOCAL_NATIVE_FORMATS.signatures;
+const NATIVE_TEXT_EXTENSIONS = LOCAL_NATIVE_FORMATS.textExtensions;
 const TEXT_EXTENSIONS = [
   // subtitle and playlist formats: their content is text, and the extension is the only
   // discriminator a small or truncated file offers.
@@ -1769,17 +1728,17 @@ function sniffFileType(filePath) {
       return { type: "audio", format: "ableton", note: "Ableton Live Set (gzip-compressed XML)" };
     }
     // The native plugin container: the FLhd header chunk is shared by .flp/.fst/.fsc, so the
-    // extension is what discriminates (kohane-index-desuno extension; see FL_CONTAINER_FORMATS).
+    // extension is what discriminates (kohane-index-desuno extension; see NATIVE_CONTAINER_FORMATS).
     if (entry.format === "kb-container") {
-      const fl = FL_CONTAINER_FORMATS[ext];
+      const fl = NATIVE_CONTAINER_FORMATS[ext];
       if (fl) return { type: fl[0], format: ext, note: fl[1] };
     }
     return { type: entry.type, format: entry.format, note: entry.note };
   }
-  // Native plugin preset/pattern formats (kohane-index-desuno extension; see FL_NATIVE_SIGNATURES).
+  // Native plugin preset/pattern formats (kohane-index-desuno extension; see NATIVE_SIGNATURES).
   // Checked after the built-in table so a built-in signature always wins. Entries may declare an
   // offset (`at`) and a digit-version constraint (`digit0`) because the family varies that byte.
-  for (const entry of FL_NATIVE_SIGNATURES) {
+  for (const entry of NATIVE_SIGNATURES) {
     const at = entry.at || 0;
     const sigLen = entry.sig.length;
     if (at + sigLen > head.length) continue;
@@ -1915,7 +1874,7 @@ function sniffFileType(filePath) {
     return { type: probe.type, format: probe.format, note: probe.note };
   }
   if (TEXT_EXTENSIONS.includes(ext)
- || FL_TEXT_EXTENSIONS.includes(ext) || local.textExtensions.includes(ext)) {
+ || NATIVE_TEXT_EXTENSIONS.includes(ext) || local.textExtensions.includes(ext)) {
     const looksText = head.every((b, i) => i === 0 ? true : (b === 0x09 || b === 0x0A || b === 0x0D || (b >= 0x20 && b <= 0x7E) || b >= 0x80));
     if (looksText) return { type: "document", format: ext, note: `plain text / script (${ext})` };
   }
@@ -7211,7 +7170,7 @@ export {
   runSilent, resolveTool,
   adbPath, runAdb, ADB_ACTIONS,
   INDICATIVE_ENCODING_HINTS, detectSystemEncoding, detectSystemEncodingSync,
-  FILE_SIGNATURES, readHeader, sniffFileType, TEXT_EXTENSIONS, FL_CONTAINER_FORMATS, FL_NATIVE_SIGNATURES, FL_TEXT_EXTENSIONS,
+  FILE_SIGNATURES, readHeader, sniffFileType, TEXT_EXTENSIONS, NATIVE_CONTAINER_FORMATS, NATIVE_SIGNATURES, NATIVE_TEXT_EXTENSIONS,
   DETECT_CANDIDATES, resolveCandidatePath,
   SENSITIVE_PATTERNS, isSensitive, keyFile, masterFile,
   getMasterSecret, getOrCreateKey, encryptSensitive, decryptSensitive,

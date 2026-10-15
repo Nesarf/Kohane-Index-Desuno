@@ -29,6 +29,9 @@ kohane-stage.wav
 # The design documents (research/notes) are kept, since the architecture cites them.
 research/
 
+# Machine-local format knowledge: the engine loads it if present, and it is never published (recovered from this machine's own files, so it is not part of the product).
+deps/local/
+
 # Downloaded or borrowed tools: recorded in deps/manifest.json, never committed
 deps/downloads/
 

@@ -14,7 +14,7 @@ using Windows.UI;
 namespace KohaneStation;
 
 /// <summary>
-/// The falling-note panel, in the idiom MIDIFall established: x is time (flowing left as the playhead
+/// The falling-note panel, in the idiom that falling-note players established: x is time (flowing left as the playhead
 /// advances), y is pitch, a block's width is its duration, and a block brightens while it sounds.
 ///
 /// It renders by writing pixels into a <see cref="WriteableBitmap"/> rather than composing thousands of

@@ -1,8 +1,8 @@
 // READ-ONLY cross-reference checker for kohane-index-desuno.
 //
 // ARCHITECTURE RULE (do not violate):
-//   kohane-index-desuno is the UNIVERSAL + EXTENDED build; mega-index-map is the narrower
-//   DSH-only plugin. mega-index-map is a REFERENCE and, when necessary, a PROOFREADING SOURCE
+//   kohane-index-desuno is the universal + extended build; the other project is the narrower
+//   host-only plugin. That project is a REFERENCE and, when necessary, a PROOFREADING SOURCE
 //   (校对源) for kohane-index-desuno — never an input that may modify it. Until kohane-index-desuno
 //   is finished, nothing from mega-index-map may affect it.
 //

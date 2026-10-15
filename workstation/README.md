@@ -1,6 +1,6 @@
 # kohane-index-desuno · 集成工作站 (KohaneStation)
 
-一台 Windows 桌面工作站，把「**DIY 索引平台**（Fruity Wrapper 式封装层）+ **DiskInfo 式即刻文件分析**」
+一台 Windows 桌面工作站，把「**DIY 索引平台**（可封装的能力工作台）+ **DiskInfo 式即刻文件分析**」
 合并成一个 WinUI 3 应用，并融入 **小一孁琥珀子（こはね）** 的 persona 与美术风格
 （Fluent / Mica 半透明 + 琥珀金·山丹·红光环·茶色）。
 
@@ -199,7 +199,7 @@ smoke: index panel says [收录 1 条] with 1 row(s)
 - 输入/拖放/浏览一个文件 → 调 `library_sniff` → 一屏给出**真实类型（magic byte）/ 格式 / 说明**；
 - 一键「写入 Library」→ 调 `library_record` 存入图鉴。
 
-### ② 图鉴 / 索引（右栏，Fruity Wrapper 式工作台）
+### ② 图鉴 / 索引（右栏，封装式工作台）
 - 关键词检索（name / description / source / tags）→ 调 `library_query`（带分页）；
 - 展示收录条目、数量；配合左栏写入，形成「识读 → 收录 → 检索」闭环。
 
