@@ -92,4 +92,6 @@ npm run verify      # = npm run check + npm run selfcheck
 
 ## 8. 许可
 
-MIT。见 `kohane-index-desuno/LICENSE`。
+**CZGD·PL-1.0**（チーズ牛丼パブリックライセンス / Cheese Gyudon Public Licence）——见仓库根的 `LICENSE`。
+
+名字是有意的，理由写在协议前言里；权利**不限用途、不限人群、不分商业与否**，并额外许可同人、二次创作与音MAD／手书／DTM。
