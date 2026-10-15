@@ -375,35 +375,29 @@ const BLENDER_STATS_EXPR = [
 //   C9 = an embedded object/plugin NAME, UTF-16LE, e.g. C9 20 <32 bytes> = "Fruity dB Meter"
 // Sampled files also carry a trailing 48 51 56 00 ("HQV") marker inside the data block.
 // Method + evidence: research/fl-studio/notes/fl-studio-formats.md (section 11), decode-flhd.mjs.
+// A container layout is machine-local knowledge: it lives in the machine's own library directory and
+// is loaded from there. With no local module this reports that it has no decoder, and the provider
+// that asks for one stays silent rather than guessing.
+let _localContainerDecoder = null;
 function decodeNativeContainer(buf) {
-  const out = { container: false, writerVersion: null, names: [], headerBytes: 0, dataBytes: 0, trailer: null };
-  if (!buf || buf.length < 16) return out;
-  if (buf.toString("latin1", 0, 4) !== "FLhd") return out;
-  const hdrSize = buf.readUInt32LE(4);
-  if (hdrSize > 64 || 8 + hdrSize + 8 > buf.length) return out;
-  out.headerBytes = hdrSize;
-  let off = 8 + hdrSize;
-  if (buf.toString("latin1", off, off + 4) !== "FLdt") return out;
-  const dataSize = buf.readUInt32LE(off + 4);
-  off += 8;
-  const end = Math.min(buf.length, off + dataSize);
-  out.dataBytes = end - off;
-  out.container = true;
-
-  const data = buf.subarray(off, end);
-  for (let i = 0; i + 2 < data.length; i++) {
-    const id = data[i], len = data[i + 1];
-    if (i + 2 + len > data.length) continue;
-    if (id === 0xc7 && len >= 3 && len <= 40) {
-      const s = data.subarray(i + 2, i + 2 + len).toString("latin1").replace(/\0+$/, "");
-      if (/^\d+(\.\d+)*$/.test(s)) out.writerVersion = s;
-    } else if (id === 0xc9 && len >= 4 && len % 2 === 0 && len <= 512) {
-      const s = data.subarray(i + 2, i + 2 + len).toString("utf16le").replace(/\0+$/, "");
-      if (/^[\x20-\x7e]{2,}$/.test(s) && !out.names.includes(s)) out.names.push(s);
+  const empty = { container: false, writerVersion: null, names: [], headerBytes: 0, dataBytes: 0, trailer: null };
+  if (_localContainerDecoder === null) {
+    _localContainerDecoder = false;
+    try {
+      const rel = LOCAL_NATIVE_FORMATS.containerDecoder;
+      if (rel) {
+        // Synchronous on purpose: one caller walks containers inside a synchronous loop, and an
+        // async loader would quietly give that caller nothing at all.
+        const requireLocal = createRequire(import.meta.url);
+        const mod = requireLocal(path.join(libraryDir(), rel));
+        if (mod && typeof mod.decodeNativeContainer === "function") _localContainerDecoder = mod.decodeNativeContainer;
+      }
+    } catch {
+      _localContainerDecoder = false;
     }
   }
-  if (data.includes(Buffer.from("HQV\0", "latin1"))) out.trailer = "HQV";
-  return out;
+  if (!_localContainerDecoder) return empty;
+  return _localContainerDecoder(buf) || empty;
 }
 
 // ---- Kohane plugin directory (adopted capabilities, kohane-owned vocabulary) ----

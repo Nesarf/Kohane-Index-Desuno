@@ -254,6 +254,10 @@ const HAS_CONTAINER_TABLE = (() => {
   } catch { return false; }
 })();
 
+// The state corpus those tests read belongs to the local evidence area, and decoding it needs the
+// local container decoder: both are machine-local, so the region below runs only where they exist.
+const HAS_LOCAL_CORPUS = fs.existsSync(FL_DB) && HAS_CONTAINER_TABLE;
+
 ok("kb-container provider registered", m.ANALYZER_PROVIDERS.some((p) => p.name === "kb-container"));
 ok("decodeNativeContainer exported", typeof m.decodeNativeContainer === "function");
 if (HAS_CONTAINER_TABLE) {
@@ -416,79 +420,85 @@ vendorFree("discover result is vendor-free", p);
 p = await plug.execute({ op: "discover", roots: [pluginDir], detail: true });
 ok("discover reports locations on request", p.ok && Array.isArray(p.roots) && p.roots.length === 1);
 
-// ops: scan is read-only, learn links
-p = await plug.execute({ op: "scan", dir: FL_DB });
-ok("scan decodes the state corpus", p.ok && p.states === 44 && p.plugins === 44, `${p.states} state(s) / ${p.plugins} plugin(s)`);
-ok("scan is read-only (no pack written)", !fs.existsSync(m.pluginPackFile()));
-vendorFree("scan result is vendor-free", p);
-p = await plug.execute({ op: "learn", dir: FL_DB, binaries: false });
-ok("learn links observations to capabilities", p.ok && p.added === 44 && p.linked >= 20, JSON.stringify({ added: p.added, linked: p.linked }));
-ok("learn persists the pack", fs.existsSync(m.pluginPackFile()));
-vendorFree("learn result is vendor-free", p);
-const pack1 = JSON.parse(fs.readFileSync(m.pluginPackFile(), "utf8"));
-ok("the pack keeps provenance, never a copy of the directory",
-  pack1.entries.length === 44 && pack1.entries.every((e) => e.localName && !e.name), `${pack1.entries.length} link(s)`);
-p = await plug.execute({ op: "list" });
-ok("linked capabilities are counted", p.ok && p.linked >= 20, `linked ${p.linked}/${p.total}`);
-vendorFree("list after learn is vendor-free", p);
-p = await plug.execute({ op: "provenance", target: "kohane-bassline-maximizer" });
-ok("provenance is the only op that shows the local side", p.ok && Array.isArray(p.local), `${p.localCount} local link(s)`);
+if (HAS_LOCAL_CORPUS) {
+  // ops: scan is read-only, learn links
+  p = await plug.execute({ op: "scan", dir: FL_DB });
+  ok("scan decodes the state corpus", p.ok && p.states === 44 && p.plugins === 44, `${p.states} state(s) / ${p.plugins} plugin(s)`);
+  ok("scan is read-only (no pack written)", !fs.existsSync(m.pluginPackFile()));
+  vendorFree("scan result is vendor-free", p);
+  p = await plug.execute({ op: "learn", dir: FL_DB, binaries: false });
+  ok("learn links observations to capabilities", p.ok && p.added === 44 && p.linked >= 20, JSON.stringify({ added: p.added, linked: p.linked }));
+  ok("learn persists the pack", fs.existsSync(m.pluginPackFile()));
+  vendorFree("learn result is vendor-free", p);
+  const pack1 = JSON.parse(fs.readFileSync(m.pluginPackFile(), "utf8"));
+  ok("the pack keeps provenance, never a copy of the directory",
+    pack1.entries.length === 44 && pack1.entries.every((e) => e.localName && !e.name), `${pack1.entries.length} link(s)`);
+  p = await plug.execute({ op: "list" });
+  ok("linked capabilities are counted", p.ok && p.linked >= 20, `linked ${p.linked}/${p.total}`);
+  vendorFree("list after learn is vendor-free", p);
+  p = await plug.execute({ op: "provenance", target: "kohane-bassline-maximizer" });
+  ok("provenance is the only op that shows the local side", p.ok && Array.isArray(p.local), `${p.localCount} local link(s)`);
 
-// personalisation: rename / collision / brand
-p = await plug.execute({ op: "rename", target: "kohane-bassline-vu", function: "Onsen Meter" });
-ok("rename personalises a capability", p.ok && p.entry.name === "Kohane Bassline Onsen Meter", p.entry && p.entry.name);
-p = await plug.execute({ op: "rename", target: "kohane-bassline-meter", function: "Onsen Meter" });
-ok("a colliding name is refused", p.ok === false, p.note);
-p = await plug.execute({ op: "rename", target: "kohane-bassline-meter", function: "Onsen Meter", confirm: true });
-const afterConfirm = m.resolveKohanePlugins(m.loadPluginPack());
-ok("... unless the user confirms, and the directory stays unique",
-  p.ok === true && m.duplicateKohaneNames(afterConfirm).length === 0,
-  `${p.entry.name}, ${afterConfirm.filter((e) => /Onsen Meter/.test(e.name)).length} personalised`);
-p = await plug.execute({ op: "brand", brand: "Kohane Station" });
-ok("brand renames the whole family", p.ok && p.brand === "Kohane Station" && p.sample[0] === "Kohane Station", JSON.stringify(p.sample));
-p = await plug.execute({ op: "brand", brand: "Kohane Bassline" });
-ok("brand is reversible", p.ok && p.sample[0] === "Kohane Bassline");
-p = await plug.execute({ op: "show", target: "kohane-bassline-onsen-meter" });
-ok("a personalised name survives a brand change", p.ok && p.entry.name === "Kohane Bassline Onsen Meter", p.entry && p.entry.name);
+  // personalisation: rename / collision / brand
+  p = await plug.execute({ op: "rename", target: "kohane-bassline-vu", function: "Onsen Meter" });
+  ok("rename personalises a capability", p.ok && p.entry.name === "Kohane Bassline Onsen Meter", p.entry && p.entry.name);
+  p = await plug.execute({ op: "rename", target: "kohane-bassline-meter", function: "Onsen Meter" });
+  ok("a colliding name is refused", p.ok === false, p.note);
+  p = await plug.execute({ op: "rename", target: "kohane-bassline-meter", function: "Onsen Meter", confirm: true });
+  const afterConfirm = m.resolveKohanePlugins(m.loadPluginPack());
+  ok("... unless the user confirms, and the directory stays unique",
+    p.ok === true && m.duplicateKohaneNames(afterConfirm).length === 0,
+    `${p.entry.name}, ${afterConfirm.filter((e) => /Onsen Meter/.test(e.name)).length} personalised`);
+  p = await plug.execute({ op: "brand", brand: "Kohane Station" });
+  ok("brand renames the whole family", p.ok && p.brand === "Kohane Station" && p.sample[0] === "Kohane Station", JSON.stringify(p.sample));
+  p = await plug.execute({ op: "brand", brand: "Kohane Bassline" });
+  ok("brand is reversible", p.ok && p.sample[0] === "Kohane Bassline");
+  p = await plug.execute({ op: "show", target: "kohane-bassline-onsen-meter" });
+  ok("a personalised name survives a brand change", p.ok && p.entry.name === "Kohane Bassline Onsen Meter", p.entry && p.entry.name);
 
-// ops: add / remove / export
-p = await plug.execute({ op: "add", capability: "Onsen Glue", role: "effect.dynamics" });
-ok("add extends the directory", p.ok && p.entry.name === "Kohane Bassline Onsen Glue", p.entry && p.entry.name);
-p = await plug.execute({ op: "add", capability: "Nope", role: "no.such.role" });
-ok("add refuses an unknown role", p.ok === false, p.note);
-p = await plug.execute({ op: "remove", target: "Onsen Glue" });
-ok("remove drops a local entry", p.ok && p.removed === 1, JSON.stringify(p));
-p = await plug.execute({ op: "remove", target: "Vintage Tape" });
-ok("an unlinked curated capability cannot be removed (only re-purposed)", p.ok === false, p.note);
-p = await plug.execute({ op: "remove", target: "kohane-bassline-compressor" });
-ok("removing a linked capability only drops the local link", p.ok === true && p.removed >= 1, p.note);
-p = await plug.execute({ op: "export", format: "md" });
-ok("export writes the directory", p.ok && fs.existsSync(p.file) && fs.readFileSync(p.file, "utf8").includes("Kohane Bassline Maximizer"), p.file);
-vendorFree("exported markdown is vendor-free", fs.readFileSync(p.file, "utf8"));
-p = await plug.execute({ op: "export", format: "ndjson" });
-ok("export ndjson is machine-readable", p.ok && JSON.parse(fs.readFileSync(p.file, "utf8").split("\n")[0]).name.startsWith("Kohane Bassline"));
-vendorFree("exported ndjson is vendor-free", fs.readFileSync(p.file, "utf8"));
-p = await plug.execute({ op: "nope" });
-ok("an unknown op fails cleanly", p.ok === false && /allowed:/.test(p.note));
-const resolved = m.resolveKohanePlugins(m.loadPluginPack());
-ok("the resolved directory keeps names unique", m.duplicateKohaneNames(resolved).length === 0, JSON.stringify(m.duplicateKohaneNames(resolved)));
+  // ops: add / remove / export
+  p = await plug.execute({ op: "add", capability: "Onsen Glue", role: "effect.dynamics" });
+  ok("add extends the directory", p.ok && p.entry.name === "Kohane Bassline Onsen Glue", p.entry && p.entry.name);
+  p = await plug.execute({ op: "add", capability: "Nope", role: "no.such.role" });
+  ok("add refuses an unknown role", p.ok === false, p.note);
+  p = await plug.execute({ op: "remove", target: "Onsen Glue" });
+  ok("remove drops a local entry", p.ok && p.removed === 1, JSON.stringify(p));
+  p = await plug.execute({ op: "remove", target: "Vintage Tape" });
+  ok("an unlinked curated capability cannot be removed (only re-purposed)", p.ok === false, p.note);
+  p = await plug.execute({ op: "remove", target: "kohane-bassline-compressor" });
+  ok("removing a linked capability only drops the local link", p.ok === true && p.removed >= 1, p.note);
+  p = await plug.execute({ op: "export", format: "md" });
+  ok("export writes the directory", p.ok && fs.existsSync(p.file) && fs.readFileSync(p.file, "utf8").includes("Kohane Bassline Maximizer"), p.file);
+  vendorFree("exported markdown is vendor-free", fs.readFileSync(p.file, "utf8"));
+  p = await plug.execute({ op: "export", format: "ndjson" });
+  ok("export ndjson is machine-readable", p.ok && JSON.parse(fs.readFileSync(p.file, "utf8").split("\n")[0]).name.startsWith("Kohane Bassline"));
+  vendorFree("exported ndjson is vendor-free", fs.readFileSync(p.file, "utf8"));
+  p = await plug.execute({ op: "nope" });
+  ok("an unknown op fails cleanly", p.ok === false && /allowed:/.test(p.note));
+  const resolved = m.resolveKohanePlugins(m.loadPluginPack());
+  ok("the resolved directory keeps names unique", m.duplicateKohaneNames(resolved).length === 0, JSON.stringify(m.duplicateKohaneNames(resolved)));
 
-if (HAS_CONTAINER_TABLE) {
-  // A container reports its plugins as kohane capabilities; the raw object names stay opt-in.
-  r = await m.analyzeObject(FL_FLP);
-  const kh = r.fields.kohane || [];
-  ok("a container maps its plugins onto kohane capabilities",
-    kh.length >= 5 && kh.every((k) => !("sourceName" in k)) && kh.some((k) => k.kohaneName && k.kohaneName.startsWith(m.KOHANE_PLUGIN_BRAND)),
-    `${kh.filter((k) => k.kohaneName).length}/${kh.length} mapped`);
-  ok("the default container view hides raw object names", !("names" in r.fields) && r.fields.pluginCount >= 5, `pluginCount=${r.fields.pluginCount}`);
-  vendorFree("container detail is vendor-free", r.detail);
-  r = await m.analyzeObject(FL_FLP, { deep: true });
-  ok("deep analysis can still show the raw names", Array.isArray(r.fields.names) && r.fields.names.length >= 5, `${(r.fields.names || []).length} name(s)`);
+  if (HAS_CONTAINER_TABLE) {
+    // A container reports its plugins as kohane capabilities; the raw object names stay opt-in.
+    r = await m.analyzeObject(FL_FLP);
+    const kh = r.fields.kohane || [];
+    ok("a container maps its plugins onto kohane capabilities",
+      kh.length >= 5 && kh.every((k) => !("sourceName" in k)) && kh.some((k) => k.kohaneName && k.kohaneName.startsWith(m.KOHANE_PLUGIN_BRAND)),
+      `${kh.filter((k) => k.kohaneName).length}/${kh.length} mapped`);
+    ok("the default container view hides raw object names", !("names" in r.fields) && r.fields.pluginCount >= 5, `pluginCount=${r.fields.pluginCount}`);
+    vendorFree("container detail is vendor-free", r.detail);
+    r = await m.analyzeObject(FL_FLP, { deep: true });
+    ok("deep analysis can still show the raw names", Array.isArray(r.fields.names) && r.fields.names.length >= 5, `${(r.fields.names || []).length} name(s)`);
 
+
+  } else {
+    r = await m.analyzeObject(FL_FLP);
+    ok("with no local table the container analyzer claims nothing", !(r && r.kind === "kb-container" && r.ok));
+  }
 
 } else {
-  r = await m.analyzeObject(FL_FLP);
-  ok("with no local table the container analyzer claims nothing", !(r && r.kind === "kb-container" && r.ok));
+  p = await plug.execute({ op: "scan", dir: FL_DB });
+  ok("scan without a local corpus reports nothing rather than inventing states", !p.ok || p.states === 0, JSON.stringify({ ok: p.ok, states: p.states }));
 }
 // ---------------------------------------------------------------- index reconciliation
 // audit / index / verify / review / prune: three different questions - what is on disk that the
