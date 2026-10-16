@@ -1,6 +1,6 @@
 # kohane-index-desuno（KID）
 
-![Licence: CZGD·PL-1.0](https://img.shields.io/badge/licence-CZGD%C2%B7PL--1.0-c0392b)
+![Licence: CZGD·PL-1.1](https://img.shields.io/badge/licence-CZGD%C2%B7PL--1.0-c0392b)
 
 > 一台**跨 harness 的文件与知识索引引擎**：把「这是什么文件」「这台机器有什么能力」「以前记过什么」
 > 收进同一个库，让任何宿主（本机 harness、MCP 客户端、命令行、桌面壳）都问同一套逻辑。
@@ -92,8 +92,8 @@ npm run verify      # = npm run check + npm run selfcheck
   （`.kbb/.kbi/.kba/.kbs/.kbm/.kbw/.kbv`，体积窗口 800 MB–2 GB）。详见
   `the local design notes (kept outside the published tree)`。
 
-- **CZGD·PL-1.0**（チーズ牛丼パブリックライセンス）· See [LICENSE](LICENSE).
+- **CZGD·PL-1.1**（チーズ牛丼パブリックライセンス）· See [LICENSE](LICENSE).
 
-**CZGD·PL-1.0**（チーズ牛丼パブリックライセンス / Cheese Gyudon Public Licence）——见仓库根的 `LICENSE`。
+**CZGD·PL-1.1**（チーズ牛丼パブリックライセンス / Cheese Gyudon Public Licence）——见仓库根的 `LICENSE`。
 
 名字是有意的，理由写在协议前言里；权利**不限用途、不限人群、不分商业与否**，并额外许可同人、二次创作与音MAD／手书／DTM。
