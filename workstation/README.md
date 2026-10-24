@@ -31,7 +31,7 @@ workstation/
 ## 编译（一条命令）
 
 ```powershell
-cd E:\kohane-index-desuno\workstation
+cd D:\kohane-index-desuno\workstation
 .\build.ps1                 # 等价于下面的 MSBuild 调用
 ```
 
@@ -96,7 +96,7 @@ Cannot assign text value 'Default' into property 'RequestedTheme' of type 'Appli
 先起桥接（纯 Node，复用 kohane-index-desuno 的 `TOOLS`）：
 
 ```powershell
-cd E:\kohane-index-desuno\workstation\engine-bridge
+cd D:\kohane-index-desuno\workstation\engine-bridge
 node server.mjs
 # -> http://127.0.0.1:8787
 ```

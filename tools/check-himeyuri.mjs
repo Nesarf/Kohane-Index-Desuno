@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-const HIMEYURI = process.env.HIMEYURI_HOME || "E:/himeyuri";
+const HIMEYURI = process.env.HIMEYURI_HOME || "D:/himeyuri";
 const EMBED = path.join(HIMEYURI, "src/embed.mjs");
 
 if (!fs.existsSync(EMBED)) {

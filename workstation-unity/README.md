@@ -14,7 +14,7 @@ KID 的配套渲染器：把引擎读出来的**谱面**画成下落音符，并
 1. 先起引擎的本地桥（与 WinUI 工作站用的是同一个）：
 
    ```bash
-   node E:/kohane-index-desuno/workstation/engine-bridge/server.mjs
+   node D:/kohane-index-desuno/workstation/engine-bridge/server.mjs
    ```
 
 2. 让 Unity 知道要看哪一份谱子——三选一：

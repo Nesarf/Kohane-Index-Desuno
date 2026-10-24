@@ -15,7 +15,7 @@
 # attached to the nearest drawing so a stray flame travels with its pose. Rows are formed wherever
 # the vertical gap between pose centres is large, then each row is read left to right.
 param(
-    [string]$Portrait = "E:\kohane-index-desuno\kohane!!!\122078052_p0.png",
+    [string]$Portrait = (Join-Path $PSScriptRoot "..\..\kohane!!!\122078052_p0.png"),
     [string]$NormalSheet = "F:\素材\图\brak 立绘\kohane\Kohane_Q.jpg",
     [string]$NormalSheetFallback = "F:\素材\图\brak 立绘\kohane\Kohane_Q_UwU.bmp",
     [string]$UltraSheet = "F:\素材\图\brak 立绘\kohane\Kohane_Ultra_Q_UwU.bmp",

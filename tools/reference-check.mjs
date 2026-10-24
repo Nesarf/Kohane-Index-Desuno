@@ -15,9 +15,13 @@
 //
 // Exit code is always 0 (this is a report, not a gate).
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REFERENCE = "E:/mega-index-map/lib/index.js";                                  // read-only reference
-const TARGET = "E:/kohane-index-desuno/kohane-index-desuno/lib/core.mjs";            // the build under development
+// 目标按本文件自己的位置算：仓库搬到哪一页，这一行都还指得准。
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const TARGET = path.join(HERE, "..", "kohane-index-desuno", "lib", "core.mjs");       // the build under development
 
 function readOrNull(p) {
   try { return fs.readFileSync(p, "utf8"); } catch { return null; }
