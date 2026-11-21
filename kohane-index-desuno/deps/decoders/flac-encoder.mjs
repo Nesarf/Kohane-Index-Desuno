@@ -2,10 +2,10 @@
 //
 // KID's own encoder, registered in deps/manifest.json as a separate module from the reader - encoders
 // and decoders are different claims, and keeping them apart is what lets "can read" and "can write" be
-// answered honestly. This stage writes a **legal but uncompressed** stream: constant subframes for
-// silence and verbatim subframes for everything else, with correct CRCs and a correct MD5 of the raw
-// PCM. Prediction (fixed/LPC) and Rice coding come next; until then the file is larger than it needs
-// to be, and the module says so rather than pretending.
+// answered honestly. This stage writes a legal compressed stream: constant subframes for silence,
+// verbatim subframes where prediction loses, and fixed predictors of orders 0-4 with partitioned Rice
+// coding (partition orders 0-2, 4-bit parameters) for everything else, with correct CRCs and a correct
+// MD5 of the raw PCM. LPC subframes are not written yet, and the module says so rather than pretending.
 import fs from "node:fs";
 import crypto from "node:crypto";
 
@@ -15,8 +15,8 @@ export const capabilities = {
   container: "flac",
   read: { level: "none", detail: "this module writes; reading is the reader module's job" },
   decode: { level: "none", detail: "not applicable" },
-  encode: { level: "partial", detail: "stream marker, STREAMINFO, a Vorbis comment with the kohane vendor string, and frames using constant and verbatim subframes (no prediction or Rice coding yet)" },
-  verifiedAgainst: "round trip against the project's own reader plus the MD5 of the source PCM recorded in STREAMINFO",
+  encode: { level: "partial", detail: "stream marker, STREAMINFO, a Vorbis comment with the kohane vendor string, and frames using constant, verbatim and fixed-predictor (orders 0-4) subframes with partitioned Rice coding (partition orders 0-2, 4-bit parameters); LPC subframes not written yet" },
+  verifiedAgainst: "round trip against the project's own reader plus the MD5 of the source PCM recorded in STREAMINFO, the independent bit-stream walk in tools/flac-walk.mjs (sample-exact), and ffmpeg where present",
 };
 
 const BLOCK = 4096;
@@ -190,6 +190,9 @@ export function encodeFlac(samples, { sampleRate, channels, bitsPerSample = 16, 
           res[i - order] = s[i] - predicted;
         }
         for (let p = 0; p <= 2; p++) {
+          // RFC 9639 9.2.7: the partition order must divide the block size evenly, so a tail
+          // frame whose block size is not a multiple of 4 may not use partition order 2.
+          if (count % (1 << p) !== 0) continue;
           const per = count >> p;
           if (per <= order || per === 0) continue;
           const params = [];

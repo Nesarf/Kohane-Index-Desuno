@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import zlib from "node:zlib";
 import { spawnSync } from "node:child_process";
-import { createCipheriv, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)); // .../tools
@@ -765,6 +765,64 @@ p = await plug.execute({ op: "import-links", path: linksFile, confirm: true });
 ok("confirm overwrites the existing links", p.ok === true && p.updated >= 1, JSON.stringify({ added: p.added, updated: p.updated }));
 p = await plug.execute({ op: "import-links", path: path.join(TMP, "nope.json") });
 ok("import of a missing file fails cleanly", p.ok === false && /no link file/.test(p.note), p.note);
+
+// ---------------------------------------------------------------- flac encode + independent walk
+section("flac encode + independent walk");
+{
+  const { encodeFlac } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "flac-encoder.mjs")).href);
+  const { walkFlac } = await import(pathToFileURL(path.join(HERE, "flac-walk.mjs")).href);
+  // One second of stereo, built to cross every subframe branch the encoder knows:
+  // silence (constant), a 440 Hz sine (fixed predictor, near-zero residual), and a deterministic
+  // LCG noise tail (residuals large enough to fall back to verbatim or a high Rice parameter).
+  const rate = 44100, ch = 2, frames = rate;
+  const samples = new Float64Array(frames * ch);
+  for (let i = 0; i < frames; i++) {
+    const t = i / rate;
+    if (i < 4410) {
+      samples[i * ch] = 0; samples[i * ch + 1] = 0;
+    } else if (i < 39690) {
+      samples[i * ch] = 0.5 * Math.sin(2 * Math.PI * 440 * t);
+      samples[i * ch + 1] = 0.5 * Math.sin(2 * Math.PI * 440 * t + Math.PI / 2);
+    } else {
+      const u = ((i * 1664525 + 1013904223) >>> 0) / 0xffffffff;
+      const u2 = (((i + 7) * 1664525 + 1013904223) >>> 0) / 0xffffffff;
+      samples[i * ch] = 0.1 * (u - 0.5);
+      samples[i * ch + 1] = 0.1 * (u2 - 0.5);
+    }
+  }
+  // The source PCM exactly as the encoder quantises it, so the comparison is against the truth the
+  // encoder was given, not against a second quantisation.
+  const srcPcm = Buffer.alloc(frames * ch * 2);
+  for (let i = 0; i < frames * ch; i++) {
+    const v = Math.max(-1, Math.min(1, samples[i] || 0));
+    srcPcm.writeInt16LE(Math.round(v * 32767), i * 2);
+  }
+  const buf = encodeFlac(samples, { sampleRate: rate, channels: ch });
+  const walked = walkFlac(buf);
+  ok("walk recovers the STREAMINFO shape",
+    walked.sampleRate === rate && walked.channels === ch && walked.bps === 16 && walked.totalFrames === frames,
+    JSON.stringify({ rate: walked.sampleRate, ch: walked.channels, bps: walked.bps, frames: walked.totalFrames }));
+  ok("walk recovers every sample", walked.pcm16.equals(srcPcm), `${walked.pcm16.length} bytes`);
+  ok("STREAMINFO MD5 is the MD5 of the source PCM",
+    walked.md5.equals(createHash("md5").update(srcPcm).digest()));
+  ok("prediction + Rice actually compress", buf.length < srcPcm.length, `flac=${buf.length} pcm=${srcPcm.length}`);
+  // Law 9: an independent reader. ffmpeg is a registered candidate; where it exists, its decode of
+  // our stream must agree byte for byte. Where it does not exist this assertion is skipped instead
+  // of failing, so a machine without ffmpeg is not penalised for an environment fact.
+  const ffmpeg = m.resolveCandidatePath(m.DETECT_CANDIDATES.find((c) => c.name === "ffmpeg"));
+  if (ffmpeg) {
+    const flacFile = path.join(TMP, "walked.flac");
+    fs.writeFileSync(flacFile, buf);
+    const dec = spawnSync(ffmpeg, ["-v", "error", "-i", flacFile, "-f", "s16le", "-"], { maxBuffer: 64 * 1024 * 1024 });
+    ok("ffmpeg decodes the walk target to the same PCM",
+      dec.status === 0 && Buffer.from(dec.stdout || []).equals(srcPcm),
+      dec.status === 0
+        ? `${(dec.stdout || []).length} bytes vs ${srcPcm.length}`
+        : String((dec.stderr || "").toString("utf8")).split("\n")[0]);
+  } else {
+    ok("ffmpeg cross-check (skipped: no ffmpeg on this machine)", true, "skipped");
+  }
+}
 
 // ---------------------------------------------------------------- environment + branding
 

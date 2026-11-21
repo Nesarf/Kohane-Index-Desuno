@@ -116,9 +116,9 @@
         "deps/media-registry.mjs (encode capability)"
       ],
       "file": "deps/decoders/flac-encoder.mjs",
-      "sha256": "06bb50c9055caf4e0f191465a613a2528d332bccf0261080ac8e77f61b2cb663",
-      "bytes": 12846,
-      "note": "verified by round trip: the project's own reader reads the stream back, the declared MD5 equals the MD5 of the source PCM, and every decoded sample equals the source sample | hash updated deliberately on 2026-10-15: fixed predictors gained orders 3 and 4 and partitioning gained orders 1 and 2 (the test file went 32877 -> 16028 -> 10573 bytes, and ffmpeg decodes the result byte-identically to the source)"
+      "sha256": "0ecfeb63faf945826f93bcb9273dc356e2f98cb5f045300888288eeaf5547c2f",
+      "bytes": 13321,
+      "note": "verified by round trip: the project's own reader reads the stream back, the declared MD5 equals the MD5 of the source PCM, and every decoded sample equals the source sample | hash updated deliberately on 2026-11-22: the independent bit-stream walk (tools/flac-walk.mjs) exposed three spec violations - subframe byte alignment that must not exist (RFC 9639 9.2: only the first subframe starts at a byte boundary), the tail-frame block size field now read after the frame number, and partition orders now required to divide the block size (RFC 9639 9.2.7); all fixed, and the walk plus ffmpeg both decode sample-exactly"
     },
     {
       "id": "external-ffmpeg",
