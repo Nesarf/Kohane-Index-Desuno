@@ -868,6 +868,56 @@ section("flac encode + independent walk");
   } else {
     ok("ffmpeg escape cross-check (skipped: no ffmpeg on this machine)", true, "skipped");
   }
+
+  // LPC subframes: an AR(2) process is exactly what LPC models - the coefficients are learned and
+  // the residual is the driving noise - while a fixed polynomial predictor cannot touch the
+  // resonance, so the search must pick LPC for this signal. The walk counts LPC subframes; the
+  // judge demands at least one, so the LPC path has to be taken, not just implemented. The driving
+  // noise is xorshift32 with a fixed seed, so the fixture is reproducible.
+  let xa = 0x9e3779b9;
+  const ar = () => {
+    xa ^= xa << 13; xa >>>= 0;
+    xa ^= xa >> 17;
+    xa ^= xa << 5; xa >>>= 0;
+    return xa / 0xffffffff;
+  };
+  const arState = [0, 0];
+  const arFrame = (amp) => {
+    // Poles at magnitude 0.99: a narrow resonance a fixed polynomial predictor cannot
+    // extrapolate, so the fixed residual stays at signal scale while the LPC residual is the
+    // driving noise itself.
+    const v = 1.8 * arState[0] - 0.98 * arState[1] + amp * (ar() - 0.5);
+    arState[1] = arState[0];
+    arState[0] = v;
+    return v;
+  };
+  for (let i = 0; i < 2000; i++) arFrame(0.08);         // warm up the narrow resonance
+  const lpcSamples = new Float64Array(rate * 2);
+  for (let i = 0; i < rate; i++) {
+    lpcSamples[i * 2] = arFrame(0.08);
+    lpcSamples[i * 2 + 1] = arFrame(0.08);
+  }
+  const lpcPcm = Buffer.alloc(rate * 2 * 2);
+  for (let i = 0; i < rate * 2; i++) {
+    const v = Math.max(-1, Math.min(1, lpcSamples[i] || 0));
+    lpcPcm.writeInt16LE(Math.round(v * 32767), i * 2);
+  }
+  const lpcBuf = encodeFlac(lpcSamples, { sampleRate: rate, channels: 2 });
+  const lpcWalked = walkFlac(lpcBuf);
+  ok("inharmonic sines take the LPC path", lpcWalked.lpcCount > 0, `lpc=${lpcWalked.lpcCount}`);
+  ok("LPC subframes decode sample-exactly", lpcWalked.pcm16.equals(lpcPcm), `${lpcWalked.pcm16.length} bytes`);
+  if (ffmpeg) {
+    const lpcFile = path.join(TMP, "lpc.flac");
+    fs.writeFileSync(lpcFile, lpcBuf);
+    const lpcDec = spawnSync(ffmpeg, ["-v", "error", "-i", lpcFile, "-f", "s16le", "-"], { maxBuffer: 64 * 1024 * 1024 });
+    ok("ffmpeg decodes the LPC stream to the same PCM",
+      lpcDec.status === 0 && Buffer.from(lpcDec.stdout || []).equals(lpcPcm),
+      lpcDec.status === 0
+        ? `${(lpcDec.stdout || []).length} bytes vs ${lpcPcm.length}`
+        : String((lpcDec.stderr || "").toString("utf8")).split("\n")[0]);
+  } else {
+    ok("ffmpeg LPC cross-check (skipped: no ffmpeg on this machine)", true, "skipped");
+  }
 }
 
 // ---------------------------------------------------------------- synth: keygen music mode

@@ -90,6 +90,7 @@ export function walkFlac(buf) {
   const pcm = Buffer.alloc(totalFrames * channels * 2);
   let written = 0;
   let escapes = 0;
+  let lpcCount = 0;
 
   while (off < buf.length) {
     const frameStart = off;
@@ -137,27 +138,19 @@ export function walkFlac(buf) {
         const wasted = rb.read(1);
         if (wasted !== 0) throw new Error("walk does not support wasted bits");
         const s = new Int32Array(block);
-        if (sft === 0) {
-          const v = rb.signed(bps);
-          for (let i = 0; i < block; i++) s[i] = v;
-        } else if (sft === 1) {
-          for (let i = 0; i < block; i++) s[i] = rb.signed(bps);
-        } else if (sft >= 8 && sft <= 12) {
-          const order = sft - 8;
-          if (block <= order) throw new Error("block too small for predictor order");
-          for (let i = 0; i < order; i++) s[i] = rb.signed(bps);
+        // RFC 9639 第 9.2.7 节：每个分区以它自己的参数开头，随后是该分区的残差。fixed 与
+        // LPC 子帧共用这段读取。
+        const readPartitions = (order) => {
           const method = rb.read(2);
           if (method !== 0) throw new Error(`walk supports Rice with 4-bit parameters only (method ${method})`);
           const p = rb.read(4);
           const parts = 1 << p;
           const per = block >> p;
           const rest = [];
-          // RFC 9639 第 9.2.7 节：每个分区以它自己的参数开头，随后是该分区的残差。
           for (let part = 0; part < parts; part++) {
             const first = part === 0 ? per - order : per;
             const k = rb.read(4);
             if (k === 15) {
-              // Escaped partition: a 5-bit per-sample width, then raw signed residuals.
               escapes++;
               const w = rb.read(5);
               for (let i = 0; i < first; i++) rest.push(w === 0 ? 0 : rb.signed(w));
@@ -171,14 +164,46 @@ export function walkFlac(buf) {
             }
           }
           if (rest.length !== block - order) throw new Error(`residual count mismatch (${rest.length} vs ${block - order})`);
-          for (let i = 0; i < rest.length; i++) {
-            const j = i + order;
-            let pred = 0;
-            if (order === 1) pred = s[j - 1];
-            else if (order === 2) pred = 2 * s[j - 1] - s[j - 2];
-            else if (order === 3) pred = 3 * s[j - 1] - 3 * s[j - 2] + s[j - 3];
-            else if (order === 4) pred = 4 * s[j - 1] - 6 * s[j - 2] + 4 * s[j - 3] - s[j - 4];
-            s[j] = pred + rest[i];
+          return rest;
+        };
+        if (sft === 0) {
+          const v = rb.signed(bps);
+          for (let i = 0; i < block; i++) s[i] = v;
+        } else if (sft === 1) {
+          for (let i = 0; i < block; i++) s[i] = rb.signed(bps);
+        } else if ((sft >= 8 && sft <= 12) || (sft >= 32 && sft <= 63)) {
+          const order = sft >= 32 ? sft - 31 : sft - 8;
+          if (block <= order) throw new Error("block too small for predictor order");
+          for (let i = 0; i < order; i++) s[i] = rb.signed(bps);
+          let qlp = null;
+          if (sft >= 32) {
+            // LPC subframe: QLP precision (4 bits, stored minus one), signed QLP shift (5 bits),
+            // then the coefficients.
+            lpcCount++;
+            const precision = rb.read(4) + 1;
+            const shift = rb.signed(5);
+            qlp = [];
+            for (let j = 0; j < order; j++) qlp.push(rb.signed(precision));
+            // RFC 9639 第 9.2.3 节：样本由「系数点积除以 2^shift」预测。用 Math.floor 得到
+            // 算术右移语义；JS 的 >> 会对超 32 位的和截断。
+            const rest0 = readPartitions(order);
+            for (let i = 0; i < rest0.length; i++) {
+              const j = i + order;
+              let sum = 0;
+              for (let k = 0; k < order; k++) sum += qlp[k] * s[j - 1 - k];
+              s[j] = Math.floor(sum / 2 ** shift) + rest0[i];
+            }
+          } else {
+            const rest = readPartitions(order);
+            for (let i = 0; i < rest.length; i++) {
+              const j = i + order;
+              let pred = 0;
+              if (order === 1) pred = s[j - 1];
+              else if (order === 2) pred = 2 * s[j - 1] - s[j - 2];
+              else if (order === 3) pred = 3 * s[j - 1] - 3 * s[j - 2] + s[j - 3];
+              else if (order === 4) pred = 4 * s[j - 1] - 6 * s[j - 2] + 4 * s[j - 3] - s[j - 4];
+              s[j] = pred + rest[i];
+            }
           }
         } else {
           throw new Error(`unsupported subframe type ${sft}`);
@@ -198,7 +223,7 @@ export function walkFlac(buf) {
   }
 
   if (written !== totalFrames) throw new Error(`frame total mismatch (${written} vs ${totalFrames})`);
-  return { sampleRate, channels, bps, totalFrames, pcm16: pcm, md5, escapes };
+  return { sampleRate, channels, bps, totalFrames, pcm16: pcm, md5, escapes, lpcCount };
 }
 
 export function walkFlacFile(file) {
