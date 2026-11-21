@@ -50,6 +50,31 @@ function envelopeAt(env, t, dur) {
 }
 
 /**
+ * A MIDI score as readMidiScore reports it (tick-space) becomes what synthesize eats (seconds):
+ * one note event per note, with the velocity folded into 0..1. The synth itself stays tick-blind -
+ * whoever reads the score converts time, and this is that conversion, in the one place that owns
+ * the synth's input shape.
+ */
+export function midiToSynth(score) {
+  const ppq = Number(score.ppq) || 480;
+  const tempo = Number(score.tempo) || 120;
+  const secPerTick = 60 / (tempo * ppq);
+  const notes = [];
+  for (const track of score.tracks || []) {
+    for (const n of track.notes || []) {
+      notes.push({
+        t: (n.tick || 0) * secPerTick,
+        dur: Math.max(0, (n.ticks || 0) * secPerTick),
+        pitch: n.note,
+        vel: (Number(n.velocity) || 0) / 127,
+      });
+    }
+  }
+  notes.sort((a, z) => a.t - z.t);
+  return { notes, tempo, ppq, source: score.path || null };
+}
+
+/**
  * Synthesise a score into interleaved float PCM in -1..1 (mono).
  * score: { sampleRate?, notes: [{t, dur, pitch, vel?, wave?}], wave?, adsr? }
  *   t/dur in seconds, pitch as a MIDI key, vel in 0..1, wave one of sine/square/saw/triangle.

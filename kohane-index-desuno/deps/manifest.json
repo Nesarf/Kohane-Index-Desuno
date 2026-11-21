@@ -132,8 +132,8 @@
         "lib/core.mjs (library_audio op=synth)"
       ],
       "file": "deps/decoders/synth.mjs",
-      "sha256": "a953956d70b29f1c394fad49feea51b6cd502b7fdcb4d32f33070f09164b83e0",
-      "bytes": 4828,
+      "sha256": "350e6fcf93f2f524b5a3916127497b7602159adf5ec7088f9e5ee9cb93d55638",
+      "bytes": 5726,
       "note": "verified by the selfcheck synth section: the sine oscillator matches the analytic sine sample for sample, the square and saw shapes hold in sustain, release ends at a silent last frame with monotonically decaying window peaks, overlapping notes stay inside the unit range, the output survives the FLAC round trip through the independent walk, and a 61-byte score generates a 66194-byte WAV (1085x) - the volume argument keygen music rests on"
     },
     {

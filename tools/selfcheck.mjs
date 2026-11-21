@@ -894,6 +894,92 @@ section("synth: keygen music mode");
     `score=${scoreBytes}B wav=${wavBytes}B ratio=${Math.round(wavBytes / scoreBytes)}x`);
 }
 
+// ---------------------------------------------------------------- midi score read
+section("midi score read");
+{
+  const { midiToSynth } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+  const { synthesize } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+  // A tiny MIDI writer for the fixtures: header + tracks + the events the reader must handle
+  // (tempo, note on/off, velocity-0 off, a hanging note, a name-only track).
+  const vlq = (v) => { const b = [v & 0x7f]; while ((v >>= 7)) b.unshift((v & 0x7f) | 0x80); return Buffer.from(b); };
+  const track = (events) => {
+    const body = Buffer.concat(events.map(([delta, ...bytes]) => Buffer.concat([vlq(delta), Buffer.from(bytes)])));
+    return Buffer.concat([Buffer.from("MTrk", "latin1"), Buffer.from([(body.length >> 24) & 0xff, (body.length >> 16) & 0xff, (body.length >> 8) & 0xff, body.length & 0xff]), body]);
+  };
+  const midi = (format, division, tracks) => {
+    const head = Buffer.alloc(14);
+    head.write("MThd", 0, "latin1");
+    head.writeUInt32BE(6, 4);
+    head.writeUInt16BE(format, 8);
+    head.writeUInt16BE(tracks.length, 10);
+    head.writeUInt16BE(division, 12);
+    return Buffer.concat([head, ...tracks.map(track)]);
+  };
+  const tempo120 = [0, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20];          // 500000 us per quarter = 120 BPM
+  const eot = [0, 0xff, 0x2f, 0x00];
+  const readScore = (file) => tool("library_audio").execute({ op: "score", path: file });
+
+  // Case A: format 0, ppq 480, three notes with clean on/off pairs.
+  const a = midi(0, 480, [[
+    tempo120,
+    [0, 0x90, 60, 100], [480, 0x80, 60, 0],
+    [0, 0x90, 64, 90], [240, 0x80, 64, 0],
+    [0, 0x90, 67, 80], [480, 0x80, 67, 0],
+    eot,
+  ]]);
+  const aFile = path.join(TMP, "fixture-a.mid");
+  fs.writeFileSync(aFile, a);
+  const aScore = await readScore(aFile);
+  ok("score reads three clean notes", aScore.ok && aScore.notes === 3, JSON.stringify({ ok: aScore.ok, notes: aScore.notes }));
+  ok("score reads tempo, ppq and format", aScore.ok && aScore.tempo === 120 && aScore.ppq === 480 && aScore.format === 0, JSON.stringify({ tempo: aScore.tempo, ppq: aScore.ppq }));
+  const aNotes = aScore.ok && aScore.tracks.length ? aScore.tracks[0].notes : [];
+  ok("score keeps note, length and pitch name",
+    aNotes.length === 3 && aNotes[0].note === 60 && aNotes[0].ticks === 480 && aNotes[0].pitch === "C4",
+    JSON.stringify(aNotes.map((n) => [n.note, n.ticks, n.pitch])));
+
+  // Case B: velocity 0 closes a note, and a note left hanging at the end still happened.
+  const b = midi(0, 480, [[
+    tempo120,
+    [0, 0x90, 60, 90], [240, 0x90, 60, 0],      // velocity-0 note off
+    [240, 0x90, 64, 90],                          // never closed; the track ends 480 ticks later
+    [480, 0xff, 0x2f, 0x00],
+  ]]);
+  const bFile = path.join(TMP, "fixture-b.mid");
+  fs.writeFileSync(bFile, b);
+  const bScore = await readScore(bFile);
+  const bNotes = bScore.ok && bScore.tracks.length ? bScore.tracks[0].notes : [];
+  ok("velocity 0 closes a note", bScore.ok && bNotes.length === 2 && bNotes.some((n) => n.note === 60 && n.ticks === 240), JSON.stringify(bNotes.map((n) => [n.note, n.ticks])));
+  ok("a hanging note still happened", bScore.ok && bNotes.some((n) => n.note === 64 && n.ticks >= 480), JSON.stringify(bNotes.map((n) => [n.note, n.ticks])));
+
+  // Case C: format 1, a name-only second track lands in emptyTracks and supplies the title.
+  const c = midi(1, 480, [
+    [tempo120, [0, 0x90, 60, 100], [480, 0x80, 60, 0], eot],
+    [[0, 0xff, 0x03, 5, ...Buffer.from("hello", "latin1")], eot],
+  ]);
+  const cFile = path.join(TMP, "fixture-c.mid");
+  fs.writeFileSync(cFile, c);
+  const cScore = await readScore(cFile);
+  ok("a name-only track is reported empty",
+    cScore.ok && cScore.declaredTracks === 2 && cScore.tracks.length === 1 && cScore.emptyTracks.includes("hello") && cScore.title === "hello",
+    JSON.stringify({ declared: cScore.declaredTracks, kept: cScore.tracks.length, empty: cScore.emptyTracks, title: cScore.title }));
+
+  // The full chain: the score from case A converts to synth time and renders the right length.
+  // 1200 ticks at 120 BPM / 480 ppq = 1.25 s; the default release adds 0.05 s.
+  const synthable = midiToSynth(aScore);
+  ok("tick time converts to seconds", synthable.notes.length === 3 && Math.abs(synthable.notes[0].t - 0) < 1e-9 && Math.abs(synthable.notes[1].t - 0.5) < 1e-9, JSON.stringify(synthable.notes.map((n) => [n.t, n.dur, n.pitch])));
+  const rendered = synthesize({ sampleRate: 44100, notes: synthable.notes, wave: "square" });
+  ok("the rendered length follows the score", rendered.frames === Math.ceil((1.25 + 0.05) * 44100), `frames=${rendered.frames}`);
+
+  // The real tune, where present: 13 parts, 3527 notes - read, not rendered, so the suite stays fast.
+  const real = "E:/hc-fl/kohane-yunooka-no-asa.mid";
+  if (fs.existsSync(real)) {
+    const realScore = await readScore(real);
+    ok("the real tune reads as recorded", realScore.ok && realScore.notes === 3527 && realScore.tracks.length === 13, JSON.stringify({ ok: realScore.ok, notes: realScore.notes, tracks: realScore.tracks.length }));
+  } else {
+    ok("the real tune (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");
