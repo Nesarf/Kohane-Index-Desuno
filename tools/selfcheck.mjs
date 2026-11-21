@@ -822,6 +822,52 @@ section("flac encode + independent walk");
   } else {
     ok("ffmpeg cross-check (skipped: no ffmpeg on this machine)", true, "skipped");
   }
+
+  // Escaped partitions (k=15): a mostly-predictable signal with a stretch of full-scale noise
+  // keeps the fixed predictor worthwhile overall while one partition's residuals are too wild for
+  // any Rice parameter - exactly the case the escape exists for. The walk counts escaped
+  // partitions, and the judge demands at least one, so the escape path has to be taken, not just
+  // implemented. The noise is xorshift32: an LCG's neighbours are linearly related, and a fixed
+  // predictor would eat them, which is precisely what must not happen here.
+  let xs = 0x1234567;
+  const xr = () => {
+    xs ^= xs << 13; xs >>>= 0;
+    xs ^= xs >> 17;
+    xs ^= xs << 5; xs >>>= 0;
+    return xs / 0xffffffff;
+  };
+  const escSamples = new Float64Array(rate * 2);
+  for (let i = 0; i < rate; i++) {
+    if (i < rate * 0.8) {
+      const t = i / rate;
+      escSamples[i * 2] = 0.5 * Math.sin(2 * Math.PI * 440 * t);
+      escSamples[i * 2 + 1] = 0.5 * Math.sin(2 * Math.PI * 440 * t + Math.PI / 2);
+    } else {
+      escSamples[i * 2] = 1.8 * (xr() - 0.5);
+      escSamples[i * 2 + 1] = 1.8 * (xr() - 0.5);
+    }
+  }
+  const escPcm = Buffer.alloc(rate * 2 * 2);
+  for (let i = 0; i < rate * 2; i++) {
+    const v = Math.max(-1, Math.min(1, escSamples[i] || 0));
+    escPcm.writeInt16LE(Math.round(v * 32767), i * 2);
+  }
+  const escBuf = encodeFlac(escSamples, { sampleRate: rate, channels: 2 });
+  const escWalked = walkFlac(escBuf);
+  ok("full-scale noise takes the escape path", escWalked.escapes > 0, `escapes=${escWalked.escapes}`);
+  ok("escaped partitions decode sample-exactly", escWalked.pcm16.equals(escPcm), `${escWalked.pcm16.length} bytes`);
+  if (ffmpeg) {
+    const escFile = path.join(TMP, "escaped.flac");
+    fs.writeFileSync(escFile, escBuf);
+    const escDec = spawnSync(ffmpeg, ["-v", "error", "-i", escFile, "-f", "s16le", "-"], { maxBuffer: 64 * 1024 * 1024 });
+    ok("ffmpeg decodes the escaped stream to the same PCM",
+      escDec.status === 0 && Buffer.from(escDec.stdout || []).equals(escPcm),
+      escDec.status === 0
+        ? `${(escDec.stdout || []).length} bytes vs ${escPcm.length}`
+        : String((escDec.stderr || "").toString("utf8")).split("\n")[0]);
+  } else {
+    ok("ffmpeg escape cross-check (skipped: no ffmpeg on this machine)", true, "skipped");
+  }
 }
 
 // ---------------------------------------------------------------- synth: keygen music mode

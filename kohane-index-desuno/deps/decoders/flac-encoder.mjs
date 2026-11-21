@@ -15,7 +15,7 @@ export const capabilities = {
   container: "flac",
   read: { level: "none", detail: "this module writes; reading is the reader module's job" },
   decode: { level: "none", detail: "not applicable" },
-  encode: { level: "partial", detail: "stream marker, STREAMINFO, a Vorbis comment with the kohane vendor string, and frames using constant, verbatim and fixed-predictor (orders 0-4) subframes with partitioned Rice coding (partition orders 0-2, 4-bit parameters); LPC subframes not written yet" },
+  encode: { level: "partial", detail: "stream marker, STREAMINFO, a Vorbis comment with the kohane vendor string, and frames using constant, verbatim and fixed-predictor (orders 0-4) subframes with partitioned Rice coding (partition orders 0-2, 4-bit parameters) including escaped partitions (k=15, 5-bit width + raw residuals); LPC subframes not written yet" },
   verifiedAgainst: "round trip against the project's own reader plus the MD5 of the source PCM recorded in STREAMINFO, the independent bit-stream walk in tools/flac-walk.mjs (sample-exact), and ffmpeg where present",
 };
 
@@ -181,6 +181,7 @@ export function encodeFlac(samples, { sampleRate, channels, bitsPerSample = 16, 
       for (let order = 0; order <= 4; order++) {
         if (count <= order) continue;
         const res = new Int32Array(count - order);
+        let resOk = true;
         for (let i = order; i < count; i++) {
           let predicted = 0;
           if (order === 1) predicted = s[i - 1];
@@ -188,7 +189,11 @@ export function encodeFlac(samples, { sampleRate, channels, bitsPerSample = 16, 
           else if (order === 3) predicted = 3 * s[i - 1] - 3 * s[i - 2] + s[i - 3];
           else if (order === 4) predicted = 4 * s[i - 1] - 6 * s[i - 2] + 4 * s[i - 3] - s[i - 4];
           res[i - order] = s[i] - predicted;
+          // Residuals are written with bps bits (16) in every branch - including the escape - so a
+          // predictor whose residual leaves that range cannot be written losslessly and is out.
+          if (res[i - order] > 32767 || res[i - order] < -32768) resOk = false;
         }
+        if (!resOk) continue;
         for (let p = 0; p <= 2; p++) {
           // RFC 9639 9.2.7: the partition order must divide the block size evenly, so a tail
           // frame whose block size is not a multiple of 4 may not use partition order 2.
@@ -204,11 +209,19 @@ export function encodeFlac(samples, { sampleRate, channels, bitsPerSample = 16, 
             if (to > res.length) { ok = false; break; }
             let bestK = 0;
             let bestPartBits = Infinity;
-            for (let k = 0; k <= 14; k++) {
-              let b = 0;
-              for (let i = from; i < to; i++) {
-                const u = (res[i] << 1) ^ (res[i] >> 31);   // zigzag: small negatives stay small
-                b += (u >>> k) + 1 + k;
+            for (let k = 0; k <= 15; k++) {
+              let b;
+              if (k === 15) {
+                // Escape code: 5 bits of per-sample width, then the residuals as signed two's
+                // complement. It wins exactly when even the coarsest Rice parameter cannot beat
+                // plain writing.
+                b = 5 + (to - from) * 16;
+              } else {
+                b = 0;
+                for (let i = from; i < to; i++) {
+                  const u = (res[i] << 1) ^ (res[i] >> 31);   // zigzag: small negatives stay small
+                  b += (u >>> k) + 1 + k;
+                }
               }
               if (b < bestPartBits) { bestPartBits = b; bestK = k; }
             }
@@ -239,6 +252,11 @@ export function encodeFlac(samples, { sampleRate, channels, bitsPerSample = 16, 
         const to = part === 0 ? best.per - best.order : best.per - best.order + part * best.per;
         body.write(k, 4);
         for (let i = from; i < to && i < best.res.length; i++) {
+          if (k === 15) {
+            if (i === from) body.write(16, 5);             // escaped partition: 5-bit sample width
+            body.writeSigned(best.res[i], 16);             // then raw signed residuals
+            continue;
+          }
           const v = best.res[i];
           const u = (v << 1) ^ (v >> 31);
           const q = u >>> k;

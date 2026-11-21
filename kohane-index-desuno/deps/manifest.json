@@ -116,9 +116,9 @@
         "deps/media-registry.mjs (encode capability)"
       ],
       "file": "deps/decoders/flac-encoder.mjs",
-      "sha256": "0ecfeb63faf945826f93bcb9273dc356e2f98cb5f045300888288eeaf5547c2f",
-      "bytes": 13321,
-      "note": "verified by round trip: the project's own reader reads the stream back, the declared MD5 equals the MD5 of the source PCM, and every decoded sample equals the source sample | hash updated deliberately on 2026-11-22: the independent bit-stream walk (tools/flac-walk.mjs) exposed three spec violations - subframe byte alignment that must not exist (RFC 9639 9.2: only the first subframe starts at a byte boundary), the tail-frame block size field now read after the frame number, and partition orders now required to divide the block size (RFC 9639 9.2.7); all fixed, and the walk plus ffmpeg both decode sample-exactly"
+      "sha256": "f390174a523516d9702d8c4bf45a50231967dd8b640f6c28bdbc1b503e3b848e",
+      "bytes": 14331,
+      "note": "verified by round trip: the project's own reader reads the stream back, the declared MD5 equals the MD5 of the source PCM, and every decoded sample equals the source sample | hash updated deliberately on 2026-11-22: the independent bit-stream walk (tools/flac-walk.mjs) exposed three spec violations - subframe byte alignment that must not exist (RFC 9639 9.2: only the first subframe starts at a byte boundary), the tail-frame block size field now read after the frame number, and partition orders now required to divide the block size (RFC 9639 9.2.7); all fixed, and the walk plus ffmpeg both decode sample-exactly | hash updated deliberately on 2026-11-22: escaped partitions (k=15) added per RFC 9639 9.2.7.1 - the 5-bit per-sample width field included - with a residual-range guard (a predictor whose residual leaves int16 is out, since every branch writes bps bits); a sine-plus-xorshift-noise fixture takes the escape path (escapes counted by the walk) and decodes sample-exactly through both the walk and ffmpeg"
     },
     {
       "id": "synth",

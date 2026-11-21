@@ -89,6 +89,7 @@ export function walkFlac(buf) {
 
   const pcm = Buffer.alloc(totalFrames * channels * 2);
   let written = 0;
+  let escapes = 0;
 
   while (off < buf.length) {
     const frameStart = off;
@@ -155,12 +156,18 @@ export function walkFlac(buf) {
           for (let part = 0; part < parts; part++) {
             const first = part === 0 ? per - order : per;
             const k = rb.read(4);
-            if (k === 15) throw new Error("escape code (k=15) is not implemented by the encoder's walk");
-            for (let i = 0; i < first; i++) {
-              const q = rb.unary();
-              const lo = k > 0 ? rb.read(k) : 0;
-              const u = (q << k) | lo;
-              rest.push((u >>> 1) ^ -(u & 1));
+            if (k === 15) {
+              // Escaped partition: a 5-bit per-sample width, then raw signed residuals.
+              escapes++;
+              const w = rb.read(5);
+              for (let i = 0; i < first; i++) rest.push(w === 0 ? 0 : rb.signed(w));
+            } else {
+              for (let i = 0; i < first; i++) {
+                const q = rb.unary();
+                const lo = k > 0 ? rb.read(k) : 0;
+                const u = (q << k) | lo;
+                rest.push((u >>> 1) ^ -(u & 1));
+              }
             }
           }
           if (rest.length !== block - order) throw new Error(`residual count mismatch (${rest.length} vs ${block - order})`);
@@ -191,7 +198,7 @@ export function walkFlac(buf) {
   }
 
   if (written !== totalFrames) throw new Error(`frame total mismatch (${written} vs ${totalFrames})`);
-  return { sampleRate, channels, bps, totalFrames, pcm16: pcm, md5 };
+  return { sampleRate, channels, bps, totalFrames, pcm16: pcm, md5, escapes };
 }
 
 export function walkFlacFile(file) {
