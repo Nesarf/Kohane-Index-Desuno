@@ -771,7 +771,29 @@ ok("import of a missing file fails cleanly", p.ok === false && /no link file/.te
 section("environment + branding");
 const env = m.detectEnvironment();
 ok("harness detected", ["cli", "mcp", "dsh", "unknown"].includes(env.harness), env.harness);
-ok("unity + blender reported", env.availableTools.some((t) => t.name === "Unity Editor") && env.availableTools.some((t) => t.name === "Blender"));
+// Tool availability is a behaviour of the candidate mechanism, not a fact about this machine:
+// a machine that happens to uninstall Unity must not fail the suite. Prove the mechanism instead -
+// existing candidates report, missing candidates stay silent, and the built-in table still knows
+// Unity Editor and Blender by name.
+ok("built-in candidates know Unity Editor and Blender",
+  m.DETECT_CANDIDATES.some((c) => c.name === "Unity Editor") && m.DETECT_CANDIDATES.some((c) => c.name === "Blender"));
+const fakeTool = path.join(TMP, "tools", "kohane-test-tool.exe");
+const ghostTool = path.join(TMP, "tools", "ghost-tool.exe");
+fs.mkdirSync(path.dirname(fakeTool), { recursive: true });
+fs.writeFileSync(fakeTool, "x");
+fs.mkdirSync(path.join(TMP, "dsh", "library"), { recursive: true });
+fs.writeFileSync(path.join(TMP, "dsh", "library", "candidates.local.json"), JSON.stringify({
+  version: 1, updatedAt: new Date().toISOString(),
+  candidates: [
+    { type: "tool", name: "Kohane Test Tool", path: fakeTool, alts: [], desc: "fixture" },
+    { type: "tool", name: "Ghost Tool", path: ghostTool, alts: [], desc: "fixture that must not be reported" },
+  ],
+}, null, 2), "utf8");
+const env2 = m.detectEnvironment();
+ok("existing local candidate reported",
+  env2.availableTools.some((t) => t.name === "Kohane Test Tool" && t.path === fakeTool),
+  JSON.stringify(env2.availableTools.map((t) => t.name)));
+ok("missing candidate stays silent", !env2.availableTools.some((t) => t.name === "Ghost Tool"));
 ok("signature counts reported", env.signatureCount === 113 && env.textExtensionCount > 0, `sig=${env.signatureCount} text=${env.textExtensionCount}`);
 const src = fs.readFileSync(CORE, "utf8");
 const megaLines = src.split("\n").filter((l) => /mega/i.test(l));

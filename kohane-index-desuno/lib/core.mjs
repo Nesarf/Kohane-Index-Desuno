@@ -7189,7 +7189,8 @@ function detectEnvironment(env = {}) {
     platform: process.platform,
     encoding: detectSystemEncoding(),
     home: dshHome(),
-    availableTools: DETECT_CANDIDATES
+    availableTools: allCandidates()
+      .filter((c) => !c.shadowed)
       .map((c) => ({ name: c.name, path: resolveCandidatePath(c) }))
       .filter((c) => c.path),
     library: { count: loadIndex().objects.length, file: indexFile() },
