@@ -32,6 +32,7 @@ import { readIsoBmff } from "../deps/decoders/isobmff.mjs";
 import { readOgg } from "../deps/decoders/ogg.mjs";
 import { readRiff } from "../deps/decoders/riff.mjs";
 import { encodeFlac, encodeWav16 } from "../deps/decoders/flac-encoder.mjs";
+import { synthesize } from "../deps/decoders/synth.mjs";
 import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
@@ -4751,13 +4752,20 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth" },
       path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM)" },
       dir: { type: "string", description: "sweep: a directory to walk for audio files" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
       threads: { type: "number", description: "sweep: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
       compare: { type: "boolean", description: "sweep: also run the same work on one core and report the speed-up" },
       maxFiles: { type: "number", description: "sweep: cap on files inspected; default 500, max 5000" },
+      notes: { type: "array", description: "synth: note events [{t, dur, pitch, vel?, wave?}], t/dur in seconds, pitch as a MIDI key" },
+      wave: { type: "string", description: "synth: default oscillator for the score: sine | square | saw | triangle (default square)" },
+      adsr: { type: "object", description: "synth: envelope {a, d, s, r} - attack/decay/release in seconds, sustain as a level 0..1" },
+      sampleRate: { type: "number", description: "synth: output sample rate; default 44100" },
+      out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key)" },
+      format: { type: "string", description: "synth: wav | flac, used when out is given and the extension says nothing" },
+      dryRun: { type: "boolean", description: "synth: report without writing when out is given" },
     },
     required: ["op"],
     additionalProperties: false,
@@ -5825,6 +5833,53 @@ const TOOLS = [
         }
       }
 
+      if (op === "synth") {
+        // Keygen-music mode: the score is data, the sound is generated. Nothing is stored unless
+        // the caller names a destination, and even then it is an export for other tools, not
+        // kohane's own storage (its own containers stay in the .kb family).
+        try {
+          const rendered = synthesize({
+            sampleRate: Number(args.sampleRate) || 44100,
+            notes: Array.isArray(args.notes) ? args.notes : [],
+            wave: args.wave,
+            adsr: args.adsr,
+          });
+          const scoreBytes = Buffer.byteLength(JSON.stringify(args.notes || []), "utf8");
+          const receipt = {
+            ok: true, op, frames: rendered.frames, sampleRate: rendered.sampleRate,
+            durationSec: Math.round(rendered.lastEndSec * 1000) / 1000,
+            notes: rendered.notes, peaks: rendered.peaks,
+            scoreBytes, pcmBytes: rendered.frames * 2,
+            volumeRatio: Math.round((rendered.frames * 2) / Math.max(1, scoreBytes)),
+            note: "the score is data and the sound is generated: no audio is kept, only these numbers",
+          };
+          if (args.out) {
+            const out = String(args.out);
+            const asked = String(args.format || "").toLowerCase();
+            const fromExtension = path.extname(out).replace(/^\./, "").toLowerCase();
+            const format = asked || fromExtension;
+            if (!["wav", "flac"].includes(format)) {
+              return { ok: false, op, note: `unknown synth format "${asked || fromExtension || "(none)"}", allowed: wav, flac` };
+            }
+            const options = { sampleRate: rendered.sampleRate, channels: 1 };
+            const buf = format === "flac"
+              ? encodeFlac(rendered.samples, Object.assign({ bitsPerSample: 16 }, options))
+              : encodeWav16(rendered.samples, options);
+            receipt.exported = format;
+            receipt.out = out;
+            receipt.bytes = buf.length;
+            receipt.kind = "export";
+            receipt.note = "this file is an export for other tools; kohane's own storage stays in its own containers";
+            if (args.dryRun) return Object.assign(receipt, { written: false });
+            fs.writeFileSync(out, buf);
+            return Object.assign(receipt, { written: true });
+          }
+          return receipt;
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -5911,7 +5966,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, peaks, pcm, play, score, sweep, info` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, peaks, pcm, play, score, sweep, info, synth` };
     }
   },
   {

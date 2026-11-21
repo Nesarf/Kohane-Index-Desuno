@@ -10,9 +10,10 @@ import { capabilities as isobmff } from "./decoders/isobmff.mjs";
 import { capabilities as ogg } from "./decoders/ogg.mjs";
 import { capabilities as riff } from "./decoders/riff.mjs";
 import { capabilities as flacWriter } from "./decoders/flac-encoder.mjs";
+import { capabilities as synth } from "./decoders/synth.mjs";
 
 /** Every decoder KID owns. A decoder not listed here is not part of the surface, whatever it does. */
-export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter];
+export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter, synth];
 
 const LEVEL_ORDER = { none: 0, metadata: 1, partial: 2, full: 3 };
 

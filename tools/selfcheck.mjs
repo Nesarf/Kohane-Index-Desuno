@@ -824,6 +824,76 @@ section("flac encode + independent walk");
   }
 }
 
+// ---------------------------------------------------------------- synth: keygen music mode
+section("synth: keygen music mode");
+{
+  const { synthesize } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+  const { encodeFlac, encodeWav16 } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "flac-encoder.mjs")).href);
+  const { walkFlac } = await import(pathToFileURL(path.join(HERE, "flac-walk.mjs")).href);
+  const rate = 44100;
+
+  // The sine oscillator agrees with the analytic sine at every sample: the phase-accumulator path
+  // and the direct evaluation are two code paths for one definition.
+  const sine = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 69, wave: "sine" }], adsr: { a: 0, d: 0, s: 1, r: 0 } });
+  let sineOk = sine.frames > 0;
+  for (let i = 0; i < sine.frames; i++) {
+    if (Math.abs(sine.samples[i] - Math.sin(2 * Math.PI * 440 * i / rate)) > 1e-9) { sineOk = false; break; }
+  }
+  ok("sine oscillator matches the analytic sine", sineOk, `${sine.frames} frames`);
+
+  // The square oscillator is two-valued during its sustain.
+  const square = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 60, wave: "square" }], adsr: { a: 0.002, d: 0.02, s: 1, r: 0 } });
+  const sq = [...new Set(square.samples.slice(rate * 0.05, rate * 0.09).map((v) => v.toFixed(3)))];
+  ok("square oscillator is two-valued in sustain", sq.length === 2, JSON.stringify(sq));
+
+  // The saw oscillator steps by one constant slope between its wrap points, so the distinct
+  // sample-to-sample steps are at most two (the slope, and the single wrap step per period).
+  const saw = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 60, wave: "saw" }], adsr: { a: 0.002, d: 0.02, s: 1, r: 0 } });
+  const diffs = new Set();
+  for (let i = rate * 0.06; i + 1 < rate * 0.09; i++) diffs.add((saw.samples[i + 1] - saw.samples[i]).toFixed(6));
+  ok("saw oscillator is linear between its wrap points", diffs.size <= 2, `${diffs.size} distinct step(s)`);
+
+  // Release ends at silence, and its per-window peaks decay monotonically. The last frame sits
+  // exactly at the release end, so it must be zero; the frames before it must not be.
+  const rel = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 60 }], adsr: { a: 0.005, d: 0.02, s: 0.7, r: 0.05 } });
+  ok("release ends at a silent last frame", rel.samples[rel.frames - 1] === 0, `${rel.frames} frames`);
+  let monoDecay = true, prev = Infinity;
+  const win = Math.floor((rel.frames - 0.1 * rate) / 10);
+  for (let w = 0; w < 10 && monoDecay; w++) {
+    let peak = 0;
+    for (let i = Math.floor(0.1 * rate) + w * win; i < Math.floor(0.1 * rate) + (w + 1) * win && i < rel.frames; i++) {
+      const a = Math.abs(rel.samples[i]);
+      if (a > peak) peak = a;
+    }
+    if (peak > prev + 1e-9) monoDecay = false;
+    prev = peak;
+  }
+  ok("release peaks decay monotonically", monoDecay);
+  ok("frame count follows the last note end", rel.frames === Math.ceil((0.1 + 0.05) * rate), `frames=${rel.frames}`);
+
+  // Overlapping notes mix inside the unit range.
+  const mix = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.5, pitch: 60 }, { t: 0.3, dur: 0.4, pitch: 64 }], wave: "square" });
+  ok("mixed peaks stay inside -1..1", mix.peaks.min >= -1 && mix.peaks.max <= 1, JSON.stringify(mix.peaks));
+
+  // The synth output survives the FLAC round trip: encoded by this project's writer, decoded by
+  // the independent walk - two modules, one agreement (law 9).
+  const pcm16 = Buffer.alloc(mix.frames * 2);
+  for (let i = 0; i < mix.frames; i++) {
+    const v = Math.max(-1, Math.min(1, mix.samples[i] || 0));
+    pcm16.writeInt16LE(Math.round(v * 32767), i * 2);
+  }
+  const walkedBack = walkFlac(encodeFlac(mix.samples, { sampleRate: rate, channels: 1 }));
+  ok("synth output survives the FLAC round trip", walkedBack.pcm16.equals(pcm16), `${walkedBack.pcm16.length} bytes`);
+
+  // The volume argument keygen music rests on: the score is data, the audio is generated. The
+  // score that produced this mix is a hundred bytes; the WAV of it is a hundred kilobytes.
+  const scoreBytes = Buffer.byteLength(JSON.stringify([{ t: 0, dur: 0.5, pitch: 60 }, { t: 0.3, dur: 0.4, pitch: 64 }]), "utf8");
+  const wavBytes = encodeWav16(mix.samples, { sampleRate: rate, channels: 1 }).length;
+  ok("the score is at least 50x smaller than the audio it generates",
+    wavBytes / scoreBytes > 50,
+    `score=${scoreBytes}B wav=${wavBytes}B ratio=${Math.round(wavBytes / scoreBytes)}x`);
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");
