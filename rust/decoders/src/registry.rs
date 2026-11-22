@@ -26,7 +26,7 @@ pub fn tools() -> Vec<ToolSurface> {
         ToolSurface {
             name: "library_audio",
             rust_ops: &["kbs", "kbw", "kbv", "kbm", "adpcm-encode", "flac-encode", "kba", "kbb", "kbi", "ztdw", "mix"],
-            dispatched: &["kba", "kbb"],
+            dispatched: &["kba", "kbb", "ztdw"],
         },
         ToolSurface { name: "library_format", rust_ops: &["sf2", "fxp", "lm4"], dispatched: &[] },
         ToolSurface { name: "library_plugin", rust_ops: &[], dispatched: &[] },
@@ -81,7 +81,7 @@ mod tests {
         assert!(all.iter().any(|t| t.name == "analyze_object"));
         let audio = all.iter().find(|t| t.name == "library_audio").unwrap();
         assert_eq!(audio.rust_ops.len(), 11);
-        assert_eq!(audio.dispatched.len(), 2);
+        assert_eq!(audio.dispatched.len(), 3);
         let fmt = all.iter().find(|t| t.name == "library_format").unwrap();
         assert_eq!(fmt.rust_ops.len(), 3);
     }

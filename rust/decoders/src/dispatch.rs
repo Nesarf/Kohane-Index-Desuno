@@ -4,7 +4,7 @@
 // named, so the shell routes it back to JS instead of guessing. The absorbed-but-unwired ops
 // (ztdw, mix, kbi and the rest) stay honest in the registry's second list.
 use crate::json::Json;
-use crate::{kba, kbb};
+use crate::{kba, kbb, ztdw};
 use std::fs;
 
 fn str_arg(params: &Json, key: &str) -> String {
@@ -25,6 +25,17 @@ pub fn dispatch(tool: &str, op: &str, params: &Json) -> Json {
     match (tool, op) {
         ("library_audio", "kba") => dispatch_kba(params),
         ("library_audio", "kbb") => dispatch_kbb(params),
+        ("library_audio", "ztdw") => dispatch_ztdw(params),
+        ("library_audio", "mix") => Json::obj(vec![
+            ("handled", Json::Bool(false)),
+            ("engine", Json::str("js")),
+            ("reason", Json::str("op=mix renders stems through the synth, which the rust side has not absorbed yet")),
+        ]),
+        ("library_audio", "kbi") => Json::obj(vec![
+            ("handled", Json::Bool(false)),
+            ("engine", Json::str("js")),
+            ("reason", Json::str("op=kbi classifies preset roles through the JS plugin table, which the rust side has not absorbed yet")),
+        ]),
         _ => Json::obj(vec![
             ("handled", Json::Bool(false)),
             ("engine", Json::str("js")),
@@ -196,6 +207,150 @@ fn dispatch_kbb(params: &Json) -> Json {
         ("op", Json::str("kbb")),
         ("note", Json::str("kbb needs a .kbb path to read, or --out with --source to convert a SoundFont")),
     ])
+}
+
+// op=ztdw: the config directory report and the sample extraction, both read paths the rust side
+// has absorbed. Staging the extracted samples as WAV needs the JS wav encoder, so --out stays on JS.
+fn dispatch_ztdw(params: &Json) -> Json {
+    let path = str_arg(params, "path");
+    let source = str_arg(params, "source");
+    if source.is_empty() {
+        if path.is_empty() {
+            return Json::obj(vec![
+                ("ok", Json::Bool(false)),
+                ("op", Json::str("ztdw")),
+                ("note", Json::str("ztdw needs the --path config to report the directory, or --path config + --source merge + --index/--sample to extract")),
+            ]);
+        }
+        return match ztdw::read_ztdw_config(&path) {
+            Ok(config) => {
+                let pick = |k: &str| config.get(k).cloned().unwrap_or(Json::Null);
+                Json::obj(vec![
+                    ("ok", Json::Bool(true)),
+                    ("op", Json::str("ztdw")),
+                    ("path", Json::str(&path)),
+                    ("container", pick("container")),
+                    ("rawSourceDir", pick("rawSourceDir")),
+                    ("pad", pick("pad")),
+                    ("mergeFiles", pick("mergeFiles")),
+                    ("sources", pick("sources")),
+                    ("pitches", pick("pitches")),
+                    ("summary", pick("summary")),
+                ])
+            }
+            Err(e) => Json::obj(vec![
+                ("ok", Json::Bool(false)),
+                ("op", Json::str("ztdw")),
+                ("note", Json::str(&e)),
+            ]),
+        };
+    }
+    if path.is_empty() {
+        return Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("ztdw")),
+            ("note", Json::str("ztdw extraction needs the --path config plus --index or --sample")),
+        ]);
+    }
+    let config = match ztdw::read_ztdw_config(&path) {
+        Ok(c) => c,
+        Err(e) => return Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("ztdw")),
+            ("note", Json::str(&e)),
+        ]),
+    };
+    // Flat view: every source with its merge file name, in directory order.
+    let mut flat: Vec<Json> = Vec::new();
+    if let Some(Json::Arr(merge_files)) = config.get("mergeFiles") {
+        for m in merge_files {
+            let merge_name = match m.get("name") {
+                Some(Json::Str(s)) => s.clone(),
+                _ => String::new(),
+            };
+            if let Some(Json::Arr(sources)) = m.get("sources") {
+                for s in sources {
+                    let mut fields: Vec<(String, Json)> = vec![("mergeFile".to_string(), Json::str(&merge_name))];
+                    if let Json::Obj(items) = s {
+                        fields.extend(items.iter().map(|(k, v)| (k.clone(), v.clone())));
+                    }
+                    flat.push(Json::Obj(fields));
+                }
+            }
+        }
+    }
+    let mut entry: Option<Json> = None;
+    if let Some(Json::Num(idx)) = params.get("index") {
+        let idx = *idx as i64;
+        if idx >= 0 && (idx as usize) < flat.len() {
+            entry = Some(flat[idx as usize].clone());
+        }
+    }
+    if entry.is_none() {
+        let sample = str_arg(params, "sample");
+        if !sample.is_empty() {
+            for e in &flat {
+                if let Some(Json::Str(name)) = e.get("name") {
+                    if *name == sample {
+                        entry = Some(e.clone());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    let Some(entry) = entry else {
+        return Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("ztdw")),
+            ("note", Json::str(&format!("no sample entry selected (config holds {}; pass --index or --sample)", flat.len()))),
+        ]);
+    };
+    if !str_arg(params, "out").is_empty() {
+        return Json::obj(vec![
+            ("handled", Json::Bool(false)),
+            ("engine", Json::str("js")),
+            ("reason", Json::str("staging the extracted samples as WAV needs the JS wav encoder")),
+        ]);
+    }
+    match ztdw::read_ztdw_sample(&source, &entry, None) {
+        Ok(got) => {
+            let pick = |k: &str| got.get(k).cloned().unwrap_or(Json::Null);
+            let num = |k: &str| -> f64 {
+                match got.get(k) {
+                    Some(Json::Num(n)) => *n,
+                    _ => 0.0,
+                }
+            };
+            let observed_peak = num("observedPeak");
+            let merge = match entry.get("mergeFile") {
+                Some(Json::Str(s)) => s.clone(),
+                _ => String::new(),
+            };
+            Json::obj(vec![
+                ("ok", Json::Bool(true)),
+                ("op", Json::str("ztdw")),
+                ("merge", Json::str(&merge)),
+                ("source", pick("source")),
+                ("start", entry.get("start").cloned().unwrap_or(Json::Null)),
+                ("base", pick("base")),
+                ("frames", pick("frames")),
+                ("channels", pick("channels")),
+                ("bitDepth", pick("bitDepth")),
+                ("pitch", entry.get("pitch").cloned().unwrap_or(Json::Null)),
+                ("rr", entry.get("rr").cloned().unwrap_or(Json::Null)),
+                ("declaredPeak", entry.get("maxPeakLin").cloned().unwrap_or(Json::Null)),
+                ("observedPeak", Json::num((observed_peak * 1e6).round() / 1e6)),
+                ("gainRatio", pick("gainRatio")),
+                ("note", Json::str("the sample region was read as int32 PCM (24-bit values); give --out to stage it as WAV")),
+            ])
+        }
+        Err(e) => Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("ztdw")),
+            ("note", Json::str(&e)),
+        ]),
+    }
 }
 
 #[cfg(test)]

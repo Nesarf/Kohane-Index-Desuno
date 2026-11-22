@@ -2578,6 +2578,45 @@ section("rust cross-check");
           r && r.handled === false && r.engine === "js",
           JSON.stringify({ rust: r, status: run.status }));
       }
+      if (fs.existsSync(realCfg) && fs.existsSync(realMerge)) {
+        const parsedEqual = (a, b) => {
+          if (typeof a === "number" && typeof b === "number") return a === b;
+          if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => parsedEqual(v, b[i]));
+          if (a && b && typeof a === "object" && typeof b === "object") {
+            const ka = Object.keys(a); const kb = Object.keys(b);
+            return ka.length === kb.length && ka.every((k) => parsedEqual(a[k], b[k]));
+          }
+          return a === b;
+        };
+        {
+          const js = await audioToolForDispatch.execute({ op: "ztdw", path: realCfg });
+          const run = spawnSync(rustBin, ["op", "library_audio", "ztdw", opArgs({ path: realCfg })], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+          let r = null;
+          try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+          ok("the rust op dispatch answers ztdw config in the JS tool's own shape (parsed-level, float tie stated)",
+            run.status === 0 && r && parsedEqual(r, js),
+            JSON.stringify({ js: JSON.stringify(js).length, rust: run.stdout.length, status: run.status }));
+        }
+        {
+          const js = await audioToolForDispatch.execute({ op: "ztdw", path: realCfg, source: realMerge, index: 0 });
+          const run = spawnSync(rustBin, ["op", "library_audio", "ztdw", opArgs({ path: realCfg, source: realMerge, index: 0 })], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+          let r = null;
+          try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+          ok("the rust op dispatch answers ztdw extraction in the JS tool's own shape (parsed-level)",
+            run.status === 0 && r && parsedEqual(r, js),
+            JSON.stringify({ js: js && JSON.stringify({ base: js.base, frames: js.frames, observedPeak: js.observedPeak }), rust: r && JSON.stringify({ base: r.base, frames: r.frames, observedPeak: r.observedPeak }), status: run.status }));
+        }
+        for (const [opName, reasonWord] of [["mix", "synth"], ["kbi", "classifies"]]) {
+          const run = spawnSync(rustBin, ["op", "library_audio", opName, opArgs({})], { encoding: "utf8", windowsHide: true });
+          let r = null;
+          try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+          ok(`the rust op dispatch names the missing piece for op=${opName} (${reasonWord})`,
+            r && r.handled === false && r.engine === "js" && String(r.reason).includes(reasonWord),
+            JSON.stringify({ rust: r, status: run.status }));
+        }
+      } else {
+        ok("the rust op dispatch ztdw (skipped: no real corpus on this machine)", true, "skipped");
+      }
     } else {
       ok("the rust op dispatch (skipped: no library_audio tool registered)", true, "skipped");
     }
