@@ -13,5 +13,6 @@ pub mod mix;
 pub mod parsers;
 pub mod registry;
 pub mod sha256;
+pub mod synth;
 pub mod zlib;
 pub mod ztdw;

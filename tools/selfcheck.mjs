@@ -2620,6 +2620,77 @@ section("rust cross-check");
     } else {
       ok("the rust op dispatch (skipped: no library_audio tool registered)", true, "skipped");
     }
+
+    // The keygen synth: square/saw/triangle/noise render bit-identical (pure arithmetic, no libm),
+    // the sine wave differs only by libm's last digit and is judged within a tight tolerance, and
+    // the refusals carry the JS sentences.
+    const synthMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+    {
+      const score = {
+        sampleRate: 8000,
+        wave: "square",
+        adsr: { a: 0.001, d: 0.01, s: 0.7, r: 0.02 },
+        notes: [
+          { t: 0, dur: 0.05, pitch: 69, wave: "square" },
+          { t: 0.06, dur: 0.05, pitch: 72, wave: "saw", vel: 0.8 },
+          { t: 0.12, dur: 0.05, pitch: 67, wave: "triangle" },
+          { t: 0.18, dur: 0.04, pitch: 64, wave: "noise", vel: 0.5 },
+        ],
+      };
+      const jsGot = synthMod.synthesize(score);
+      const jsDigest = createHash("md5").update(Buffer.from(jsGot.samples.buffer, jsGot.samples.byteOffset, jsGot.samples.byteLength)).digest("hex");
+      const scoreFile = path.join(TMP, "rust-x-synth-score.json");
+      fs.writeFileSync(scoreFile, JSON.stringify(score));
+      const run = spawnSync(rustBin, ["synth", scoreFile], { encoding: "utf8", windowsHide: true });
+      let r = null;
+      try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+      ok("the rust synth renders the non-sine waves bit-identical with the JS side",
+        r && r.samplesMd5 === jsDigest && r.frames === jsGot.frames && r.notes === 4,
+        JSON.stringify({ js: { frames: jsGot.frames, md5: jsDigest, peaks: jsGot.peaks }, rust: r && { frames: r.frames, md5: r.samplesMd5, peaks: r.peaks }, status: run.status }));
+      const jsPeaks = JSON.stringify(jsGot.peaks);
+      const rustPeaks = r ? JSON.stringify(r.peaks) : "";
+      ok("the rust synth reports the same peaks",
+        r && rustPeaks === jsPeaks,
+        JSON.stringify({ js: jsPeaks, rust: rustPeaks, status: run.status }));
+    }
+    {
+      const score = {
+        sampleRate: 8000,
+        wave: "sine",
+        adsr: { a: 0.002, d: 0.02, s: 0.6, r: 0.03 },
+        notes: [{ t: 0, dur: 0.1, pitch: 69, wave: "sine" }],
+      };
+      const jsGot = synthMod.synthesize(score);
+      const scoreFile = path.join(TMP, "rust-x-synth-sine.json");
+      fs.writeFileSync(scoreFile, JSON.stringify(score));
+      const run = spawnSync(rustBin, ["synth", scoreFile], { encoding: "utf8", windowsHide: true });
+      let r = null;
+      try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+      // The sine wave goes through Math.sin, where fdlibm and Rust's libm can differ by one ulp,
+      // so the byte-level digest is not the contract here; the shape is - frames, note count and
+      // the peak within a tight tolerance, with the implementation difference stated.
+      ok("the rust synth renders the sine wave with the same shape (frames, peaks, one-ulp tolerance stated)",
+        r && r.frames === jsGot.frames && r.notes === 1 && Math.abs(r.peaks.max - jsGot.peaks.max) < 1e-9,
+        JSON.stringify({ js: { frames: jsGot.frames, max: jsGot.peaks.max }, rust: r && { frames: r.frames, max: r.peaks.max }, status: run.status }));
+    }
+    {
+      const refuseCases = [
+        { name: "empty", score: { notes: [] } },
+        { name: "no-pitch", score: { notes: [{ t: 0, dur: 0.1 }] } },
+        { name: "wave", score: { notes: [{ t: 0, dur: 0.1, pitch: 60, wave: "warp" }] } },
+      ];
+      for (const c of refuseCases) {
+        let jsMessage = "";
+        try { synthMod.synthesize(c.score); } catch (e) { jsMessage = e.message; }
+        const f = path.join(TMP, `rust-x-synth-refuse-${c.name}.json`);
+        fs.writeFileSync(f, JSON.stringify(c.score));
+        const run = spawnSync(rustBin, ["synth", f], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust synth refuses ${c.name} with the JS sentence`,
+          run.status === 1 && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {
