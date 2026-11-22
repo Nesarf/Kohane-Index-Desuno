@@ -2606,13 +2606,39 @@ section("rust cross-check");
             run.status === 0 && r && parsedEqual(r, js),
             JSON.stringify({ js: js && JSON.stringify({ base: js.base, frames: js.frames, observedPeak: js.observedPeak }), rust: r && JSON.stringify({ base: r.base, frames: r.frames, observedPeak: r.observedPeak }), status: run.status }));
         }
-        for (const [opName, reasonWord] of [["mix", "synth"], ["kbi", "classifies"]]) {
-          const run = spawnSync(rustBin, ["op", "library_audio", opName, opArgs({})], { encoding: "utf8", windowsHide: true });
+        {
+          const run = spawnSync(rustBin, ["op", "library_audio", "mix", opArgs({})], { encoding: "utf8", windowsHide: true });
           let r = null;
           try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
-          ok(`the rust op dispatch names the missing piece for op=${opName} (${reasonWord})`,
-            r && r.handled === false && r.engine === "js" && String(r.reason).includes(reasonWord),
+          ok("the rust op dispatch names the missing piece for op=mix (synth)",
+            r && r.handled === false && r.engine === "js" && String(r.reason).includes("synth"),
             JSON.stringify({ rust: r, status: run.status }));
+        }
+        {
+          // op=kbi convert: the four-char-id shape takes its name from the file name and its role
+          // from the plugin id through the same hint tables both sides carry.
+          const drumBytes = Buffer.concat([Buffer.from("drum", "latin1"), Buffer.from([1, 2, 3, 4, 5])]);
+          const drumFile = path.join(TMP, "rust-x-kbi-drum.fxp");
+          fs.writeFileSync(drumFile, drumBytes);
+          const js = await audioToolForDispatch.execute({ op: "kbi", source: drumFile, out: path.join(TMP, "rust-x-kbi-drum.kbi"), dryRun: true });
+          const run = spawnSync(rustBin, ["op", "library_audio", "kbi", opArgs({ source: drumFile, out: path.join(TMP, "rust-x-kbi-drum.kbi"), dryRun: true })], { encoding: "utf8", windowsHide: true });
+          const rust = (run.stdout || "").trim();
+          const jsText = JSON.stringify(js);
+          ok("the rust op dispatch answers kbi convert dryRun in the JS tool's own shape",
+            run.status === 0 && rust === jsText,
+            JSON.stringify({ js: jsText, rust: rust, status: run.status }));
+        }
+        {
+          // The role classifier on the same constructed inputs: the drum id lands on the drum
+          // shelf, a name that matches nothing stays unknown.
+          for (const [name, expected] of [["drum", "generator.drum"], ["syl1", "unknown"], ["great compressor", "effect.dynamics"]]) {
+            const run = spawnSync(rustBin, ["roles", name], { encoding: "utf8", windowsHide: true });
+            let r = null;
+            try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+            ok(`the rust role classifier puts "${name}" on the ${expected} shelf`,
+              r && r.role === expected,
+              JSON.stringify({ rust: r, status: run.status }));
+          }
         }
       } else {
         ok("the rust op dispatch ztdw (skipped: no real corpus on this machine)", true, "skipped");

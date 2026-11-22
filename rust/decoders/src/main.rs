@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, dispatch, flac, kba, kbb, kbi, mix, registry, synth, ztdw};
+use kohane_decoder::{adpcm, dispatch, flac, kba, kbb, kbi, mix, registry, roles, synth, ztdw};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -158,6 +158,7 @@ fn main() -> ExitCode {
         Some("mix") => cmd_mix(&args),
         Some("op") => cmd_op(&args),
         Some("synth") => cmd_synth(&args),
+        Some("roles") => cmd_roles(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -190,6 +191,7 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder mix pan <value>");
             eprintln!("       kohane-decoder op <tool> <op> [args.json|-]");
             eprintln!("       kohane-decoder synth <score.json>");
+            eprintln!("       kohane-decoder roles <sourceName> [category]");
             ExitCode::from(2)
         }
     }
@@ -764,4 +766,18 @@ fn cmd_synth(args: &[String]) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn cmd_roles(args: &[String]) -> ExitCode {
+    let Some(name) = args.get(2) else {
+        eprintln!("usage: kohane-decoder roles <sourceName> [category]");
+        return ExitCode::from(2);
+    };
+    let category = args.get(3).map(String::as_str).unwrap_or("");
+    let role = roles::classify_plugin_role(name, category);
+    println!(
+        "{}",
+        kohane_decoder::json::Json::obj(vec![("role", kohane_decoder::json::Json::str(&role))]).render()
+    );
+    ExitCode::SUCCESS
 }

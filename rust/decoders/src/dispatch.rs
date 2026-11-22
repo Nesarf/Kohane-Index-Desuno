@@ -4,7 +4,8 @@
 // named, so the shell routes it back to JS instead of guessing. The absorbed-but-unwired ops
 // (ztdw, mix, kbi and the rest) stay honest in the registry's second list.
 use crate::json::Json;
-use crate::{kba, kbb, ztdw};
+use crate::parsers::fxp::parse_fpch;
+use crate::{kba, kbb, kbi, roles, ztdw};
 use std::fs;
 
 fn str_arg(params: &Json, key: &str) -> String {
@@ -31,11 +32,7 @@ pub fn dispatch(tool: &str, op: &str, params: &Json) -> Json {
             ("engine", Json::str("js")),
             ("reason", Json::str("op=mix renders stems through the synth, which the rust side has not absorbed yet")),
         ]),
-        ("library_audio", "kbi") => Json::obj(vec![
-            ("handled", Json::Bool(false)),
-            ("engine", Json::str("js")),
-            ("reason", Json::str("op=kbi classifies preset roles through the JS plugin table, which the rust side has not absorbed yet")),
-        ]),
+        ("library_audio", "kbi") => dispatch_kbi(params),
         _ => Json::obj(vec![
             ("handled", Json::Bool(false)),
             ("engine", Json::str("js")),
@@ -349,6 +346,124 @@ fn dispatch_ztdw(params: &Json) -> Json {
             ("ok", Json::Bool(false)),
             ("op", Json::str("ztdw")),
             ("note", Json::str(&e)),
+        ]),
+    }
+}
+
+fn basename_without_preset_ext(src: &str) -> String {
+    let base = src.rsplit(['/', '\\']).next().unwrap_or(src);
+    let lower = base.to_lowercase();
+    for ext in [".fxp", ".ffp"] {
+        if lower.ends_with(ext) {
+            return base[..base.len() - ext.len()].to_string();
+        }
+    }
+    base.to_string()
+}
+
+// op=kbi convert: the source+out path, with the role classified through the same hint tables the
+// JS side uses. The directory batch stays on JS; the four-char shape takes its name from the file
+// name, the CcnK shape from the preset itself unless a title overrides it.
+fn dispatch_kbi(params: &Json) -> Json {
+    let source = str_arg(params, "source");
+    if source.is_empty() {
+        if !str_arg(params, "dir").is_empty() {
+            return Json::obj(vec![
+                ("handled", Json::Bool(false)),
+                ("engine", Json::str("js")),
+                ("reason", Json::str("the directory batch conversion stays on JS for now")),
+            ]);
+        }
+        return Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("kbi")),
+            ("note", Json::str("kbi needs --out with --source")),
+        ]);
+    }
+    let bytes = match fs::read(&source) {
+        Ok(b) => b,
+        Err(e) => {
+            return Json::obj(vec![
+                ("ok", Json::Bool(false)),
+                ("op", Json::str("kbi")),
+                ("note", Json::str(&format!("cannot read {source}: {e}"))),
+            ])
+        }
+    };
+    let is_ccnk = bytes.len() >= 4 && &bytes[0..4] == b"CcnK";
+    let plugin_id = if is_ccnk {
+        parse_fpch(&bytes).map(|p| p.plugin).unwrap_or_default()
+    } else {
+        String::from_utf8_lossy(&bytes[..4]).to_string()
+    };
+    let role = roles::classify_plugin_role(&plugin_id, "");
+    let title = str_arg(params, "title");
+    let name: Option<String> = if !title.is_empty() {
+        Some(title)
+    } else if is_ccnk {
+        None
+    } else {
+        Some(basename_without_preset_ext(&source))
+    };
+    let doc = match kbi::convert_preset_to_kbi(&bytes, name.as_deref(), &role) {
+        Ok(d) => d,
+        Err(e) => {
+            return Json::obj(vec![
+                ("ok", Json::Bool(false)),
+                ("op", Json::str("kbi")),
+                ("note", Json::str(&e)),
+            ])
+        }
+    };
+    let pick_str = |k: &str| match doc.get(k) {
+        Some(Json::Str(s)) => s.clone(),
+        _ => String::new(),
+    };
+    let pick_num = |k: &str| match doc.get(k) {
+        Some(Json::Num(n)) => *n,
+        _ => 0.0,
+    };
+    let kbi_bytes = kbi::write_kbi(&doc);
+    let out = str_arg(params, "out");
+    if out.is_empty() {
+        return Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("kbi")),
+            ("note", Json::str("kbi needs --out with --source")),
+        ]);
+    }
+    if params.get("dryRun").is_some() {
+        return Json::obj(vec![
+            ("ok", Json::Bool(true)),
+            ("op", Json::str("kbi")),
+            ("source", Json::str(&source)),
+            ("name", Json::str(&pick_str("name"))),
+            ("role", Json::str(&pick_str("role"))),
+            ("sourceFormat", Json::str(&pick_str("source"))),
+            ("paramBytes", Json::int(pick_num("paramBytes") as i64)),
+            ("bytes", Json::int(kbi_bytes.len() as i64)),
+            ("written", Json::Bool(false)),
+            ("note", Json::str("dryRun: the .kbi instrument was not written")),
+        ]);
+    }
+    match fs::write(&out, &kbi_bytes) {
+        Ok(()) => Json::obj(vec![
+            ("ok", Json::Bool(true)),
+            ("op", Json::str("kbi")),
+            ("source", Json::str(&source)),
+            ("out", Json::str(&out)),
+            ("name", Json::str(&pick_str("name"))),
+            ("role", Json::str(&pick_str("role"))),
+            ("sourceFormat", Json::str(&pick_str("source"))),
+            ("paramBytes", Json::int(pick_num("paramBytes") as i64)),
+            ("bytes", Json::int(kbi_bytes.len() as i64)),
+            ("written", Json::Bool(true)),
+            ("note", Json::str("converted: the instrument carries a name, a kohane role and the byte-faithful parameters - no product name survives")),
+        ]),
+        Err(e) => Json::obj(vec![
+            ("ok", Json::Bool(false)),
+            ("op", Json::str("kbi")),
+            ("note", Json::str(&format!("cannot write {out}: {e}"))),
         ]),
     }
 }

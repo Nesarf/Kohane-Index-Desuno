@@ -12,6 +12,7 @@ pub mod md5;
 pub mod mix;
 pub mod parsers;
 pub mod registry;
+pub mod roles;
 pub mod sha256;
 pub mod synth;
 pub mod zlib;
