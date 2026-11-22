@@ -1076,6 +1076,67 @@ section("midi score read");
   }
 }
 
+// ---------------------------------------------------------------- soundfont read
+section("soundfont read");
+{
+  const { readSf2 } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "sf2.mjs")).href);
+  const ck = (id, body) => {
+    const b = Buffer.from(body);
+    const pad = b.length % 2 ? Buffer.alloc(1) : Buffer.alloc(0);
+    const head = Buffer.alloc(8);
+    head.write(id, 0, "latin1");
+    head.writeUInt32LE(b.length, 4);
+    return Buffer.concat([head, b, pad]);
+  };
+  const list = (type, ...chunks) => ck("LIST", Buffer.concat([Buffer.from(type, "latin1"), ...chunks]));
+  const phdr = (name, preset, bank) => {
+    const b = Buffer.alloc(38);
+    b.write(name, 0, "latin1");
+    b.writeUInt16LE(preset, 20);
+    b.writeUInt16LE(bank, 22);
+    return b;
+  };
+  const inst = (name) => { const b = Buffer.alloc(22); b.write(name, 0, "latin1"); return b; };
+  const shdr = (name, rate, pitch) => {
+    const b = Buffer.alloc(46);
+    b.write(name, 0, "latin1");
+    b.writeUInt32LE(rate, 36);
+    b[pitch >= 0 ? 40 : 41] = Math.abs(pitch);
+    b.writeUInt16LE(1, 44);
+    return b;
+  };
+  const fixture = ck("RIFF", Buffer.concat([
+    Buffer.from("sfbk", "latin1"),
+    list("sdta", ck("smpl", Buffer.alloc(64, 7))),
+    list("pdta",
+      ck("phdr", Buffer.concat([phdr("Bright Piano", 0, 0), phdr("Soft Pad", 5, 1), phdr("EOP", 0, 0)])),
+      ck("inst", Buffer.concat([inst("Piano Inst"), inst("Pad Inst"), inst("EOI")])),
+      ck("shdr", Buffer.concat([shdr("Piano Sample", 44100, 60), shdr("Pad Sample", 22050, 48), shdr("EOS", 0, 0)])),
+    ),
+  ]));
+  const sf2File = path.join(TMP, "fixture.sf2");
+  fs.writeFileSync(sf2File, fixture);
+  const sf2 = readSf2(sf2File);
+  ok("soundfont presets read with name and numbers",
+    sf2.presets.length === 2 && sf2.presets[0].name === "Bright Piano" && sf2.presets[1].preset === 5 && sf2.presets[1].bank === 1,
+    JSON.stringify(sf2.presets));
+  ok("soundfont instruments read", sf2.instruments.length === 2 && sf2.instruments[0].name === "Piano Inst", JSON.stringify(sf2.instruments.map((i) => i.name)));
+  ok("soundfont samples read with rate and pitch",
+    sf2.samples.length === 2 && sf2.samples[0].sampleRate === 44100 && sf2.samples[0].originalPitch === 60 && sf2.samples[1].sampleRate === 22050,
+    JSON.stringify(sf2.samples.map((s) => [s.name, s.sampleRate, s.originalPitch])));
+  ok("soundfont sample data size reported", sf2.smplBytes === 64, `smplBytes=${sf2.smplBytes}`);
+  ok("a WAVE file is refused as not a soundfont", (() => { try { readSf2(path.join(TMP, "walked.flac")); return false; } catch (e) { return /not a SoundFont/.test(e.message); } })());
+  const real = "D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2";
+  if (fs.existsSync(real)) {
+    const realFont = readSf2(real);
+    ok("the real font reads as a populated soundfont",
+      realFont.presets.length > 0 && realFont.samples.length > 0 && realFont.summary.sampleRateHint > 0,
+      JSON.stringify(realFont.summary));
+  } else {
+    ok("the real font (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");
