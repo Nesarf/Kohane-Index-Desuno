@@ -1,0 +1,10 @@
+[package]
+name = "kohane-decoder"
+version = "0.1.0"
+edition = "2021"
+description = "KID's Rust decoder core - the verification brick: encoders rewritten in Rust must be byte-exact with the JS originals, cross-checked by the existing JS walkers (law 9)."
+license = "MIT"
+
+[[bin]]
+name = "kohane-decoder"
+path = "src/main.rs"

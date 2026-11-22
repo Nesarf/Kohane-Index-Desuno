@@ -1969,6 +1969,36 @@ section("lm4 drumkit");
   }
 }
 
+// ---------------------------------------------------------------- rust cross-check
+section("rust cross-check");
+{
+  const rustBin = "D:/kohane-index-desuno/rust/decoders/target/release/kohane-decoder.exe";
+  if (fs.existsSync(rustBin)) {
+    const { encodeKba } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kba.mjs")).href);
+    // the same PCM recipe the rust fixture uses: both sides encode these exact bytes
+    const n = 4096;
+    const pcm = new Int16Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = Math.sin((i * 0.013) % (2 * Math.PI)) * 9000 + Math.sin((i * 0.1) % (2 * Math.PI)) * 3000 + ((i * 37) % 2000) - 1000;
+      pcm[i] = Math.round(v);
+    }
+    const jsKba = encodeKba(pcm, { sampleRate: 44100, channels: 1, tier: "adpcm" });
+    const rawFile = path.join(TMP, "rust-xpcm.raw");
+    const rustOut = path.join(TMP, "rust-x.kba");
+    fs.writeFileSync(rawFile, Buffer.from(pcm.buffer));
+    const run = spawnSync(rustBin, ["adpcm", rawFile, rustOut, "44100"], { encoding: "utf8", windowsHide: true });
+    ok("the rust encoder runs on the shared PCM",
+      !run.error && run.status === 0 && fs.existsSync(rustOut),
+      JSON.stringify({ status: run.status, error: run.error && run.error.message }));
+    const rustKba = fs.readFileSync(rustOut);
+    ok("the rust ADPCM port is byte-exact with the JS original (law 9 cross-reader)",
+      rustKba.length === jsKba.length && rustKba.equals(jsKba),
+      JSON.stringify({ js: jsKba.length, rust: rustKba.length }));
+  } else {
+    ok("the rust cross-check (skipped: rust binary not built)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

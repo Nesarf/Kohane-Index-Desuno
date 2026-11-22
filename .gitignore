@@ -51,3 +51,5 @@ workstation-unity/Logs/
 workstation-unity/UserSettings/
 
 external/
+
+rust/decoders/target/
