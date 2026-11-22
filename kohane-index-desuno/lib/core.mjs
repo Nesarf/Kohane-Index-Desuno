@@ -4798,7 +4798,7 @@ const TOOL_INPUT_SCHEMAS = {
       "properties": {
           "op": {
               "type": "string",
-              "description": "list | scan | learn | add | remove | analyzer-add | analyzer-remove | draft | deps | report | deliver | unseal"
+              "description": "kb | list | scan | learn | add | remove | analyzer-add | analyzer-remove | draft | deps | report | deliver | unseal"
           },
           "dir": {
               "type": "string",
@@ -5986,7 +5986,41 @@ const TOOLS = [
       });
       const pack = loadLocalFormats();
 
-      if (op === "list") {
+      // ---- the kohane format family in one view ----
+  // kb: every .kb member the engine knows, how it is recognised (magic or structure), and whether
+  // an analyzer interprets it. Described by the same tables that recognise the members, never by a
+  // separate hand-written list that could drift out of sync.
+  function kbFamily() {
+    const members = FILE_SIGNATURES
+      .filter((s) => String(s.format || "").startsWith("kb-"))
+      .map((s) => ({
+        format: s.format,
+        type: s.type,
+        sig: Array.isArray(s.sig) ? s.sig.map((b) => b.toString(16).padStart(2, "0")).join(" ") : null,
+        recognition: "magic",
+        note: s.note,
+        analyzer: (ANALYZER_PROVIDERS.find((a) => String(a.kind || "") === s.format) || {}).name || null,
+      }));
+    members.push({
+      format: "kb-envelope",
+      type: "audio",
+      sig: null,
+      recognition: "structure",
+      note: "envelope state (u32-led float table); extension fnv/env plus structural bounds, no magic",
+      analyzer: null,
+    });
+    members.sort((a, b) => String(a.format).localeCompare(String(b.format)));
+    return {
+      family: "kb",
+      members,
+      count: members.length,
+      note: "kohane's own containers, in one view: third-party formats are read as input and produced only as exports; the .kb family is what kohane stores itself in",
+    };
+  }
+
+  if (op === "kb") return Object.assign({ ok: true, op }, kbFamily());
+
+  if (op === "list") {
         // Report cadence is a *reminder for the user*, never an automatic send.
         let lastReport = null;
         const at = (ms) => ({ at: new Date(ms).toISOString(), daysSince: Math.floor((Date.now() - ms) / 86400000) });
@@ -6436,7 +6470,7 @@ const TOOLS = [
         return { ok: true, op, file: packFile, removed: before - next.analyzers.length, local: summary(loadLocalFormats()), note: `removed ${before - next.analyzers.length} local analyzer(s)` };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: list, scan, learn, add, remove, analyzer-add, analyzer-remove, draft, deps, report, deliver, unseal` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: kb, list, scan, learn, add, remove, analyzer-add, analyzer-remove, draft, deps, report, deliver, unseal` };
     }
   },
 

@@ -1168,6 +1168,22 @@ section("preset chunks read");
   }
 }
 
+// ---------------------------------------------------------------- kohane format family view
+section("kohane format family view");
+{
+  const kb = await tool("library_format").execute({ op: "kb" });
+  ok("the kb family view lists its members", kb.ok === true && kb.count >= 4, JSON.stringify(kb.members && kb.members.map((m) => m.format)));
+  ok("magic-recognised members carry their signature",
+    kb.members.filter((m) => m.recognition === "magic").every((m) => m.sig && m.sig.length > 0),
+    `${kb.members.filter((m) => m.recognition === "magic").length} magic member(s)`);
+  ok("the container member is backed by an analyzer",
+    kb.members.some((m) => m.format === "kb-container" && m.analyzer === "kb-container"),
+    JSON.stringify(kb.members.find((m) => m.format === "kb-container")));
+  ok("the envelope member is recognised by structure, not magic",
+    kb.members.some((m) => m.format === "kb-envelope" && m.recognition === "structure" && m.sig === null),
+    JSON.stringify(kb.members.find((m) => m.format === "kb-envelope")));
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");
