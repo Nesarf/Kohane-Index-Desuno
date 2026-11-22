@@ -12,3 +12,4 @@ pub mod parsers;
 pub mod registry;
 pub mod sha256;
 pub mod zlib;
+pub mod ztdw;

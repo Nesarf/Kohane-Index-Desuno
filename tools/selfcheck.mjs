@@ -2389,6 +2389,69 @@ section("rust cross-check");
           JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
       }
     }
+
+    // The ztdw container: the config receipt string for string with the JS reader on the real
+    // corpus, the first sample region agreeing on base, frames, peaks and the sample digest,
+    // and both refusals carrying the JS sentences.
+    const ztdwMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "ztdw.mjs")).href);
+    const realCfg = "D:/heavier7strings_samples/Heavier7Strings_samples/config";
+    const realMerge = "D:/heavier7strings_samples/Heavier7Strings_samples/h7s_samples_merge0.ztdw";
+    if (fs.existsSync(realCfg) && fs.existsSync(realMerge)) {
+      const jsDoc = ztdwMod.readZtdwConfig(realCfg);
+      const jsReceipt = JSON.stringify(jsDoc);
+      const cRun = spawnSync(rustBin, ["ztdw", "config", realCfg], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+      const rustReceipt = (cRun.stdout || "").trim();
+      // Parsed-level equality rather than string equality: both sides round-trip a float to the
+      // shortest decimal, and on the rare tie (two equally short decimals for one double) Rust and
+      // V8 may pick different last digits. Parsing collapses both spellings to the same double, so
+      // the tree comparison is exact everywhere except that tie, which is stated rather than hidden.
+      const parsedEqual = (a, b) => {
+        if (typeof a === "number" && typeof b === "number") return a === b;
+        if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => parsedEqual(v, b[i]));
+        if (a && b && typeof a === "object" && typeof b === "object") {
+          const ka = Object.keys(a); const kb = Object.keys(b);
+          return ka.length === kb.length && ka.every((k) => parsedEqual(a[k], b[k]));
+        }
+        return a === b;
+      };
+      let jsParsed = null; let rustParsed = null;
+      try { jsParsed = JSON.parse(jsReceipt); rustParsed = JSON.parse(rustReceipt); } catch { jsParsed = null; rustParsed = null; }
+      ok("the rust ztdw config agrees with the JS reader on the real corpus (parsed-level equality, the float tie stated)",
+        cRun.status === 0 && jsParsed !== null && rustParsed !== null && parsedEqual(jsParsed, rustParsed),
+        JSON.stringify({ js: jsReceipt.length, rust: rustReceipt.length, status: cRun.status }));
+      const first = jsDoc.mergeFiles[0]?.sources[0];
+      if (first) {
+        const jsGot = ztdwMod.readZtdwSample(realMerge, first);
+        const jsDigest = createHash("md5").update(Buffer.from(jsGot.samples.buffer, jsGot.samples.byteOffset, jsGot.samples.byteLength)).digest("hex");
+        const srcFile = path.join(TMP, "rust-x-ztdw-source.json");
+        fs.writeFileSync(srcFile, JSON.stringify(first));
+        const sRun = spawnSync(rustBin, ["ztdw", "sample", realMerge, srcFile], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+        let r = null;
+        try { r = sRun.status === 0 ? JSON.parse(sRun.stdout) : null; } catch { r = null; }
+        ok("the rust ztdw sample agrees with the JS reader on the real first region",
+          r && r.base === jsGot.base && r.frames === jsGot.frames && r.samplesMd5 === jsDigest &&
+            r.observedPeak === jsGot.observedPeak && r.gainRatio === jsGot.gainRatio && r.declaredPeak === first.maxPeakLin,
+          JSON.stringify({ js: { base: jsGot.base, frames: jsGot.frames, observed: jsGot.observedPeak, gainRatio: jsGot.gainRatio }, rust: r && { base: r.base, frames: r.frames, observed: r.observedPeak, gainRatio: r.gainRatio }, status: sRun.status }));
+      }
+      const refuseCases = [
+        { name: "note", bytes: () => Buffer.from("nothing here") },
+        { name: "inflate", bytes: () => Buffer.concat([Buffer.from("do not crack pls.", "latin1"), Buffer.from("not a zlib stream at all")]) },
+      ];
+      for (const c of refuseCases) {
+        const badBytes = c.bytes();
+        let jsMessage = "";
+        try { ztdwMod.readZtdwConfig(badBytes); } catch (e) { jsMessage = e.message; }
+        const f = path.join(TMP, `rust-x-refuse-ztdw-${c.name}.cfg`);
+        fs.writeFileSync(f, badBytes);
+        const run = spawnSync(rustBin, ["ztdw", "config", f], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust ztdw config reader refuses ${c.name} with the JS sentence`,
+          run.status === 1 && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    } else {
+      ok("the rust ztdw reader (skipped: no real corpus on this machine)", true, "skipped");
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {

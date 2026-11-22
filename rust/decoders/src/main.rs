@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, kba, kbb, kbi, registry};
+use kohane_decoder::{adpcm, flac, kba, kbb, kbi, registry, ztdw};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -154,6 +154,7 @@ fn main() -> ExitCode {
         Some("kba") => cmd_kba(&args),
         Some("kbb") => cmd_kbb(&args),
         Some("kbi") => cmd_kbi(&args),
+        Some("ztdw") => cmd_ztdw(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -180,6 +181,8 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder kbi write <out.kbi> [params.json|-]");
             eprintln!("       kohane-decoder kbi read <file.kbi>");
             eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
+            eprintln!("       kohane-decoder ztdw config <file>");
+            eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
             ExitCode::from(2)
         }
     }
@@ -558,6 +561,68 @@ fn cmd_kbi(args: &[String]) -> ExitCode {
             eprintln!("usage: kohane-decoder kbi write <out.kbi> [params.json|-]");
             eprintln!("       kohane-decoder kbi read <file.kbi>");
             eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn cmd_ztdw(args: &[String]) -> ExitCode {
+    let Some(verb) = args.get(2).map(String::as_str) else {
+        eprintln!("usage: kohane-decoder ztdw config <file>");
+        eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
+        return ExitCode::from(2);
+    };
+    match verb {
+        "config" => {
+            let Some(target) = args.get(3) else {
+                eprintln!("usage: kohane-decoder ztdw config <file>");
+                return ExitCode::from(2);
+            };
+            match ztdw::read_ztdw_config(target) {
+                Ok(r) => {
+                    println!("{}", r.render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "sample" => {
+            let (Some(merge_file), Some(source_file)) = (args.get(3), args.get(4)) else {
+                eprintln!("usage: kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
+                return ExitCode::from(2);
+            };
+            let text = match fs::read_to_string(source_file) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("cannot read {source_file}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            let source = match kohane_decoder::json::parse(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
+            let base = args.get(5).and_then(|s| s.parse::<usize>().ok());
+            match ztdw::read_ztdw_sample(merge_file, &source, base) {
+                Ok(r) => {
+                    println!("{}", r.render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        _ => {
+            eprintln!("usage: kohane-decoder ztdw config <file>");
+            eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
             ExitCode::from(2)
         }
     }
