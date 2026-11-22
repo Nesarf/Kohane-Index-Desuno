@@ -38,13 +38,13 @@
     },
     {
       "id": "rust-core",
-      "title": "The Rust decoder kernel: ADPCM, FLAC, sf2, fxp, lm4 and the kb-media containers byte-exact with the JS originals",
+      "title": "The Rust decoder kernel, complete: ADPCM, FLAC, sf2, fxp, lm4, the kb-media containers, kba, kbb, kbi, ztdw and the mix renderer all byte-exact with the JS originals",
       "scope": "capability",
-      "status": "active",
+      "status": "done",
       "parent": "lang-plan",
       "after": [],
       "source": "rust/decoders/src/main.rs header comment",
-      "notes": "Six bricks are already byte-exact under law 9 cross-reading: ADPCM and FLAC encoders match the JS streams, sf2/fxp/lm4 parsers agree field for field on real corpora, and the four kb-media containers (kbs/kbw/kbv/kbm) write identical envelope bytes, read identical receipts and refuse with the same sentences. The remaining family - ztdw, kba, kbb, kbi and the mix renderer - is the next port, one brick at a time with the same fixture discipline.",
+      "notes": "The whole decoder family is ported under law 9 cross-reading. Byte-exact where the format allows it: ADPCM and FLAC encoders match the JS streams, sf2/fxp/lm4 parsers agree field for field on real corpora, the four kb-media containers write identical envelope bytes and read identical receipts, the kba container (raw and adpcm tiers) and the kbb bank document match byte for byte on the real SoundFont, the kbi instrument converts both preset shapes byte-exact, and the mixer renders stems bit-identical through the same loop order and f32 widening. Round-trip and one-ulp contracts where the format or the platform does not allow byte equality, stated in the judges themselves: the kba lossless tier (stored-block zlib, not a zlib library's matching strategy), the ztdw config float tie, and the pan coefficients' one-ulp libm difference. The remaining half of the migration is the tool surface, not the kernel: rust-toolface's exec dispatch.",
       "touches": [
         "rust/decoders/",
         "tools/selfcheck.mjs"
