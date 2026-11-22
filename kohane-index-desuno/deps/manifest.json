@@ -234,6 +234,22 @@
       "note": "verified by the selfcheck kpb assets (stage 5) section: a zone-chain fixture converts to two zones with one deduplicated sample and enumerated key ranges and loops, the real Romantic Tp.sf2 converts inside the 8%-20% content-volume window, and a bundle carrying the bank self-proves it on verify | hash updated deliberately on 2026-11-22: the real font writes genCount 0 in its bags and leaves the count as the gap to the next bag's genIndex - the walker now takes the count when present and the gap otherwise, skips bags with no generators, and sample PCM is copied through the Buffer API so a pooled Buffer at an odd offset cannot break a typed-array view"
     },
     {
+      "id": "kbi",
+      "kind": "decoder",
+      "name": "kohane single instrument",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "carry one patch in kohane's own words: a name, a role in kohane's vocabulary (never a product name) and the byte-faithful parameter body, with a recipe field reserved for the day the parameters are written as a kohane synthesis recipe; converts FL FPCh presets and four-char-id binary presets (the FabFilter .ffp shape) in, one or in batch",
+      "usedBy": [
+        "deps/media-registry.mjs (read/encode capability)",
+        "lib/core.mjs (library_audio op=kbi)"
+      ],
+      "file": "deps/decoders/kbi.mjs",
+      "sha256": "18dba56bae9da7e78d7d44f1600dc3fc21414f876280e98b3cb16ad47bc6cda8",
+      "bytes": 6853,
+      "note": "verified by the selfcheck kbi preset conversion section: FPCh and four-char-id conversions carry name, role and byte-faithful parameters, the document round-trips, foreign bytes are refused with the container's own name, batch mode walks a tree and reports the broken files, and the real Sylenth1 and FabFilter corpora convert where present"
+    },
+    {
       "id": "external-ffmpeg",
       "kind": "binary",
       "name": "ffmpeg (external decoder, borrowed)",

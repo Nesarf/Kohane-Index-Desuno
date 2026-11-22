@@ -37,6 +37,8 @@ import { readKbs, writeKbs, replayKbs, readKbw, writeKbw, readKbv, writeKbv, rea
 import { panCoeffs, mixStems, assertRenderable } from "../deps/decoders/mix.mjs";
 import { encodeKba, decodeKba, kbaStats } from "../deps/decoders/kba.mjs";
 import { convertSf2ToKbb, readKbb, kbbSummary } from "../deps/decoders/kbb.mjs";
+import { writeKbi, readKbi, convertPresetToKbi, convertPresetBatch } from "../deps/decoders/kbi.mjs";
+import { parseFpch } from "../deps/decoders/fxp.mjs";
 import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
@@ -4773,7 +4775,7 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb | kbi" },
       path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read" },
       dir: { type: "string", description: "sweep: a directory to walk for audio files" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
@@ -4788,7 +4790,7 @@ const TOOL_INPUT_SCHEMAS = {
       bpm: { type: "number", description: "kbs: tempo in beats per minute" },
       key: { type: "string", description: "kbs: the key or scale name, e.g. 'D double-harmonic minor'" },
       parts: { type: "array", description: "kbs: part names for the score's voices" },
-      source: { type: "string", description: "kbw: a WAV/FLAC file whose min/max buckets become the envelope written to --out" },
+      source: { type: "string", description: "kbw: a WAV/FLAC file whose min/max buckets become the envelope written to --out; kba/kbb: the WAV/AIFF or .sf2 source; kbi: one .fxp or .ffp preset to convert" },
       bucketSize: { type: "number", description: "kbw: samples per min/max bucket when writing an envelope; default 512" },
       channelCount: { type: "number", description: "kbw: channel count recorded in the envelope; default 1" },
       layout: { type: "object", description: "kbs: when out is given, also write a companion .kbv view - {lanes, octaveLines, palette}" },
@@ -4799,6 +4801,7 @@ const TOOL_INPUT_SCHEMAS = {
       master: { type: "object", description: "kbm: the master strip - {gain, effects?}" },
       tier: { type: "string", description: "kba/kbb: the storage tier - adpcm (default) | lossless | raw; the tier is the volume knob" },
       targetRate: { type: "number", description: "kbb: sample rate the converted samples are downsampled toward (default 22050); sources at least twice the target take the honest 2:1 low-pass decimation" },
+      ext: { type: "string", description: "kbi: the preset extension to walk in batch mode (default .fxp; .ffp for the plain four-char-id shape)" },
       out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key); kbs: the .kbs score destination; kbw: the .kbw envelope destination; mix: the mixed WAV/FLAC destination" },
       format: { type: "string", description: "synth: wav | flac, used when out is given and the extension says nothing" },
       dryRun: { type: "boolean", description: "synth: report without writing when out is given" },
@@ -6159,6 +6162,59 @@ const TOOLS = [
         }
       }
 
+      if (op === "kbi") {
+        // The single-instrument container: a preset converted into kohane's own words - the name,
+        // a role in kohane's vocabulary (never a product name) and the byte-faithful parameters.
+        if (args.source) {
+          try {
+            const src = String(args.source);
+            const bytes = fs.readFileSync(src);
+            // the FPCh shape carries its own name, so nothing overrides it unless a title is given;
+            // the four-char-id shape has no name inside, so the file name is the only name it has
+            const isCcnK = bytes.length >= 4 && bytes.toString("latin1", 0, 4) === "CcnK";
+            const name = args.title || (isCcnK ? undefined : path.basename(src).replace(/\.(fxp|ffp)$/i, ""));
+            let role = "unknown";
+            try {
+              const pluginId = bytes.length >= 4 && bytes.toString("latin1", 0, 4) === "CcnK" ? parseFpch(bytes).plugin : bytes.toString("latin1", 0, 4);
+              role = classifyPluginRole(pluginId, "");
+            } catch { role = "unknown"; }
+            const doc = convertPresetToKbi({ bytes, name, role });
+            const out = args.out ? String(args.out) : "";
+            const kbiBuf = writeKbi(doc);
+            if (args.dryRun) return Object.assign({ ok: true, op, source: src, name: doc.name, role: doc.role, sourceFormat: doc.source, paramBytes: doc.paramBytes, bytes: kbiBuf.length, written: false, note: "dryRun: the .kbi instrument was not written" });
+            if (!out) return { ok: false, op, note: "kbi needs --out with --source" };
+            fs.writeFileSync(out, kbiBuf);
+            return Object.assign({ ok: true, op, source: src, out, name: doc.name, role: doc.role, sourceFormat: doc.source, paramBytes: doc.paramBytes, bytes: kbiBuf.length, written: true, note: "converted: the instrument carries a name, a kohane role and the byte-faithful parameters - no product name survives" });
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (args.dir) {
+          try {
+            const dir = String(args.dir);
+            const ext = String(args.ext || ".fxp").toLowerCase();
+            const maxFiles = Math.min(Math.max(Number(args.maxFiles) || 10000, 1), 100000);
+            const batch = convertPresetBatch(dir, { ext, maxFiles, roleOf: (id) => classifyPluginRole(id, "") });
+            const plugins = [...batch.plugins.entries()].sort((a, b) => b[1].count - a[1].count);
+            return {
+              ok: true, op, dir, ext, files: batch.files, converted: batch.ok, failed: batch.failed,
+              sourceBytes: batch.bytes, paramBytes: batch.paramBytes,
+              plugins: plugins.map(([id, r]) => ({ id, count: r.count, bytes: r.bytes })),
+              failedNames: batch.failedNames,
+              note: "the batch conversion reports facts; nothing is written unless an outDir is given",
+            };
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kbi needs a .kbi path to read, or --source with --out to convert one preset" };
+        try {
+          return Object.assign({ ok: true, op, path: args.path }, readKbi(fs.readFileSync(String(args.path))));
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -6245,7 +6301,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbi, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth` };
     }
   },
   {

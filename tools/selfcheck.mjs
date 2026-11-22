@@ -1708,6 +1708,103 @@ section("kpb assets (stage 5)");
   }
 }
 
+// ---------------------------------------------------------------- kbi preset conversion
+section("kbi preset conversion");
+{
+  const audioTool = tool("library_audio");
+  const kbiMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kbi.mjs")).href);
+
+  // An FL FPCh preset fixture: CcnK envelope, plugin id, NUL-terminated name, then a parameter body.
+  const makeFxp = (name, plugin, paramsLen) => {
+    const params = Buffer.alloc(paramsLen);
+    for (let i = 0; i < paramsLen; i++) params[i] = (i * 7 + 3) & 0xff;
+    const nameBytes = Buffer.from(name, "latin1");
+    const total = 28 + nameBytes.length + 1 + paramsLen;
+    const b = Buffer.alloc(total);
+    b.write("CcnK", 0, "latin1");
+    b.writeUInt32BE(total - 8, 4);
+    b.write("FPCh", 8, "latin1");
+    b.write(plugin, 16, "latin1");
+    nameBytes.copy(b, 28);
+    params.copy(b, 28 + nameBytes.length + 1);
+    return b;
+  };
+  const fxpFixture = makeFxp("Test Preset", "syl1", 64);
+  const conv1 = kbiMod.convertPresetToKbi({ bytes: fxpFixture, role: "generator.synth" });
+  const paramsBack = Buffer.from(conv1.params, "base64");
+  const paramsAt = 28 + "Test Preset".length + 1;   // after the NUL-terminated name
+  ok("an FL FPCh preset converts into a .kbi with name, kohane role and byte-faithful parameters",
+    conv1.format === "kohane-instrument" && conv1.name === "Test Preset" && conv1.kind === "preset" &&
+    conv1.source === "fxp" && conv1.role === "generator.synth" && conv1.paramBytes === 64 &&
+    paramsBack.length === 64 && paramsBack[10] === fxpFixture[paramsAt + 10],
+    JSON.stringify({ name: conv1.name, role: conv1.role, paramBytes: conv1.paramBytes }));
+
+  const kbiBuf = kbiMod.writeKbi(conv1);
+  const kbiBack = kbiMod.readKbi(kbiBuf);
+  ok("a .kbi instrument round-trips field for field",
+    kbiBack.name === "Test Preset" && kbiBack.role === "generator.synth" && kbiBack.params === conv1.params && kbiBack.paramBytes === 64,
+    JSON.stringify({ name: kbiBack.name, role: kbiBack.role }));
+
+  let kbiJunk = null;
+  try { kbiMod.readKbi(Buffer.from("hello, not an instrument")); } catch (e) { kbiJunk = String(e.message); }
+  ok("a non-instrument is refused with the container's own name",
+    kbiJunk !== null && /not a kohane instrument/.test(kbiJunk), kbiJunk);
+
+  // The plain four-char-id shape: id + binary body, the name from the file name.
+  const ffpShape = Buffer.concat([Buffer.from("FMic", "latin1"), Buffer.from([1, 2, 3, 4, 5, 6])]);
+  const conv2 = kbiMod.convertPresetToKbi({ bytes: ffpShape, name: "Beat Down", role: "generator.synth" });
+  ok("a four-char-id preset converts with the file's name and the rest as parameters",
+    conv2.name === "Beat Down" && conv2.source === "ffp" && conv2.paramBytes === 6 &&
+    Buffer.from(conv2.params, "base64").equals(Buffer.from([1, 2, 3, 4, 5, 6])),
+    JSON.stringify({ name: conv2.name, source: conv2.source }));
+
+  // The op surface: convert one fixture file to disk and read it back.
+  const fxpFile = path.join(TMP, "fixture.fxp");
+  fs.writeFileSync(fxpFile, fxpFixture);
+  const kbiOut = path.join(TMP, "fixture.kbi");
+  const kbiWrite = await audioTool.execute({ op: "kbi", source: fxpFile, out: kbiOut });
+  const kbiRead = await audioTool.execute({ op: "kbi", path: kbiOut });
+  ok("op=kbi converts a preset to disk and reads it back",
+    kbiWrite.ok === true && kbiWrite.written === true && kbiWrite.name === "Test Preset" && typeof kbiWrite.role === "string" &&
+    kbiRead.ok === true && kbiRead.name === "Test Preset" && kbiRead.paramBytes === 64,
+    JSON.stringify({ ok: kbiWrite.ok, name: kbiRead.name, role: kbiRead.role }));
+
+  // Batch mode over a small tree: ten good presets, two broken files.
+  const batchDir = path.join(TMP, "presets");
+  fs.mkdirSync(path.join(batchDir, "sub"), { recursive: true });
+  for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(batchDir, `pad${i}.fxp`), makeFxp(`Pad ${i}`, "syl1", 32));
+  for (let i = 0; i < 2; i++) fs.writeFileSync(path.join(batchDir, "sub", `lead${i}.fxp`), makeFxp(`Lead ${i}`, "XfsX", 32));
+  fs.writeFileSync(path.join(batchDir, "broken1.fxp"), Buffer.from([0x00, 0x01, 0x02]));
+  fs.writeFileSync(path.join(batchDir, "broken2.fxp"), Buffer.from([0xff, 0xfe, 0xfd]));
+  const batch = await audioTool.execute({ op: "kbi", dir: batchDir, ext: ".fxp" });
+  ok("op=kbi batch walks the tree, converts the presets and reports the broken ones",
+    batch.ok === true && batch.converted === 10 && batch.failed === 2 && batch.plugins.length === 2 &&
+    batch.plugins.some((p) => p.id === "syl1" && p.count === 8) && batch.plugins.some((p) => p.id === "XfsX" && p.count === 2),
+    JSON.stringify({ converted: batch.converted, failed: batch.failed, plugins: batch.plugins.map((p) => [p.id, p.count]) }));
+
+  // The real corpora, where present: the Sylenth1 preset library and the FabFilter presets.
+  const sylDir = "D:/Sylenth1";
+  if (fs.existsSync(sylDir)) {
+    const sylBatch = await audioTool.execute({ op: "kbi", dir: sylDir, ext: ".fxp", maxFiles: 300 });
+    ok("the real preset library converts in batch (capped at 300 for the check)",
+      sylBatch.ok === true && sylBatch.converted === 300 && sylBatch.failed === 0 && sylBatch.plugins.length >= 1,
+      JSON.stringify({ converted: sylBatch.converted, failed: sylBatch.failed, plugins: sylBatch.plugins.slice(0, 4).map((p) => [p.id, p.count]) }));
+  } else {
+    ok("the real preset library conversion (skipped: not on this machine)", true, "skipped");
+  }
+  const ffpRoot = "C:/Users/Administrator/Documents/FabFilter";
+  if (fs.existsSync(ffpRoot)) {
+    const oneFfp = (() => { const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { const r = walk(p); if (r) return r; } else if (e.name.toLowerCase().endsWith(".ffp")) return p; } return null; }; return walk(ffpRoot); })();
+    const ffpConv = await audioTool.execute({ op: "kbi", source: oneFfp, out: path.join(TMP, "real.kbi"), title: "Real Preset" });
+    const ffpRead = await audioTool.execute({ op: "kbi", path: path.join(TMP, "real.kbi") });
+    ok("a real FabFilter preset converts with the four-char-id shape",
+      ffpConv.ok === true && ffpConv.sourceFormat === "ffp" && ffpConv.paramBytes > 0 && ffpRead.ok === true && ffpRead.name === "Real Preset",
+      JSON.stringify({ ok: ffpConv.ok, sourceFormat: ffpConv.sourceFormat, paramBytes: ffpConv.paramBytes }));
+  } else {
+    ok("the real FabFilter preset conversion (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");
