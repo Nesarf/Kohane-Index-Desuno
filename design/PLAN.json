@@ -1,5 +1,6 @@
 {
   "title": "kohane-index-desuno: an LLM/API-friendly standalone indexer with a Rust core",
+  "sections": ["units", "plan"],
   "goals": [
     {
       "id": "standalone",
