@@ -1,7 +1,7 @@
 {
   "name": "kohane-index-desuno",
   "version": "0.1.0",
-  "description": "Cross-harness interop Library: MCP server + CLI to record, index and search files, tools, environments, knowledge and work records across workspaces, with a self-extending file-format library.",
+  "description": "A standalone, LLM/API-friendly indexing engine: 16 schema-driven tools (MCP + CLI) that record, index and search files, tools, environments, knowledge and work records across workspaces, with a self-extending file-format library and a wide planned integration surface (composition, borrowed renderers, desktop workstation).",
   "type": "module",
   "main": "mcp/index.mjs",
   "bin": {
