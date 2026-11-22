@@ -43,6 +43,8 @@ public sealed partial class WaterfallView : UserControl
 
     private readonly List<Note> _notes = new();
     private readonly List<TrackInfo> _tracks = new();
+    private readonly List<float> _peaks = new();       // min/max buckets interleaved, from op=peaks
+    private double _peakDurationSec;                    // the audio the peaks describe, in seconds
     private double _ppq = 96;
     private double _tempo = 120;
     private double _lastTick;
@@ -135,6 +137,30 @@ public sealed partial class WaterfallView : UserControl
     public void Start() { _timer.Start(); PlayButton.Content = "暂停"; }
     public void Stop() { _timer.Stop(); PlayButton.Content = "落下"; }
 
+    /// <summary>
+    /// Loads a waveform envelope as returned by the engine's library_audio op=peaks (min/max
+    /// buckets interleaved), so sampled tracks can draw their envelope inside the falling blocks.
+    /// </summary>
+    public void LoadPeaks(string json)
+    {
+        _peaks.Clear();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("frames", out var frames) && root.TryGetProperty("sampleRate", out var rate)
+            && frames.ValueKind == JsonValueKind.Number && rate.ValueKind == JsonValueKind.Number && rate.GetDouble() > 0)
+        {
+            _peakDurationSec = frames.GetDouble() / rate.GetDouble();
+        }
+        if (!root.TryGetProperty("peaks", out var peaks) || peaks.ValueKind != JsonValueKind.Array) return;
+        foreach (var pair in peaks.EnumerateArray())
+        {
+            if (pair.ValueKind != JsonValueKind.Array || pair.GetArrayLength() < 2) continue;
+            _peaks.Add((float)pair[0].GetDouble());
+            _peaks.Add((float)pair[1].GetDouble());
+        }
+        Draw();
+    }
+
     private void OnPlayClick(object sender, RoutedEventArgs e)
     {
         if (_timer.IsEnabled) Stop(); else Start();
@@ -223,6 +249,7 @@ public sealed partial class WaterfallView : UserControl
             else
             {
                 Rect(pixels, w, h, x0, top, width, height, face, intensity);
+                if (_peaks.Count > 0) Envelope(pixels, w, h, note, x0, top, width, height, face);
             }
         }
 
@@ -234,6 +261,41 @@ public sealed partial class WaterfallView : UserControl
 
         var bar = _ppq > 0 ? _playhead / (_ppq * 4) : 0;
         PositionLine.Text = $"小节 {bar:0.0} / {(_ppq > 0 ? _lastTick / (_ppq * 4) : 0):0.0} · {(int)(_playhead * _secondsPerTick / 60)}:{(_playhead * _secondsPerTick % 60):00.0}";
+    }
+
+    /// <summary>
+    /// Draws the waveform envelope of a sampled track inside its falling block: one vertical
+    /// min/max line per peak bucket, mapped through the note's own time span to the audio's.
+    /// </summary>
+    private void Envelope(byte[] px, int w, int h, Note note, int x0, int top, int width, int height, Color face)
+    {
+        var buckets = _peaks.Count / 2;
+        if (buckets == 0 || _peakDurationSec <= 0) return;
+        var t0 = note.Tick * _secondsPerTick;
+        var t1 = (note.Tick + note.Ticks) * _secondsPerTick;
+        var b0 = Math.Max(0, (int)(t0 / _peakDurationSec * buckets));
+        var b1 = Math.Min(buckets - 1, (int)(t1 / _peakDurationSec * buckets));
+        if (b1 < b0) return;
+        var mid = top + height / 2.0;
+        var scale = height / 2.0;
+        var span = b1 - b0 + 1;
+        for (var b = b0; b <= b1; b++)
+        {
+            var lo = _peaks[b * 2];
+            var hi = _peaks[b * 2 + 1];
+            var x = x0 + (b - b0) * width / span;
+            var y0 = (int)(mid - hi * scale);
+            var y1 = (int)(mid - lo * scale);
+            for (var yy = Math.Max(0, Math.Min(y0, y1)); yy <= Math.Min(h - 1, Math.Max(y0, y1)); yy++)
+            {
+                var o = (yy * w + x) * 4;
+                if (o + 3 >= px.Length) continue;
+                px[o] = (byte)Math.Min(255, face.B * 1.4);
+                px[o + 1] = (byte)Math.Min(255, face.G * 1.4);
+                px[o + 2] = (byte)Math.Min(255, face.R * 1.4);
+                px[o + 3] = 0xFF;
+            }
+        }
     }
 
     private static void Rect(byte[] px, int w, int h, int x, int y, int width, int height, Color face, double intensity)

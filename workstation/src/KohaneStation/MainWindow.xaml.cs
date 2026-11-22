@@ -789,6 +789,22 @@ public sealed partial class MainWindow : Window
                 ShowWaterfall();
                 _waterfall.Start();
                 App.Trace($"waterfall: loaded {path}");
+
+                // A sampled track's envelope: where a same-named audio file sits beside the score,
+                // its min/max peaks fill the falling blocks. The engine measures the waveform; the
+                // shell only hands the result to the panel.
+                foreach (var audioExt in new[] { ".wav", ".flac" })
+                {
+                    var audioPath = Path.ChangeExtension(path, audioExt);
+                    if (!File.Exists(audioPath)) continue;
+                    var peaks = await PostToolJsonAsync("library_audio", new { op = "peaks", path = audioPath });
+                    if (peaks.TryGetProperty("ok", out var pok) && pok.ValueKind == JsonValueKind.True)
+                    {
+                        _waterfall.LoadPeaks(peaks.GetRawText());
+                        App.Trace($"waterfall: envelope loaded from {audioPath}");
+                    }
+                    break;
+                }
             }
             else
             {
