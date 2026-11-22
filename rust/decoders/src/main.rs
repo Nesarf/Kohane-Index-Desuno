@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, kba, registry};
+use kohane_decoder::{adpcm, flac, kba, kbb, registry};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -152,6 +152,7 @@ fn main() -> ExitCode {
         }
         Some("kb") => cmd_kb(&args),
         Some("kba") => cmd_kba(&args),
+        Some("kbb") => cmd_kbb(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -173,6 +174,8 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
             eprintln!("       kohane-decoder kba decode <file.kba>");
             eprintln!("       kohane-decoder kba stats <file.kba>");
+            eprintln!("       kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
+            eprintln!("       kohane-decoder kbb read <file.kbb>");
             ExitCode::from(2)
         }
     }
@@ -375,6 +378,69 @@ fn cmd_kba(args: &[String]) -> ExitCode {
             eprintln!("usage: kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
             eprintln!("       kohane-decoder kba decode <file.kba>");
             eprintln!("       kohane-decoder kba stats <file.kba>");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn cmd_kbb(args: &[String]) -> ExitCode {
+    let Some(verb) = args.get(2).map(String::as_str) else {
+        eprintln!("usage: kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
+        eprintln!("       kohane-decoder kbb read <file.kbb>");
+        return ExitCode::from(2);
+    };
+    match verb {
+        "convert" => {
+            let (Some(input), Some(output)) = (args.get(3), args.get(4)) else {
+                eprintln!("usage: kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
+                return ExitCode::from(2);
+            };
+            let name = args.get(5).cloned();
+            let rate: u32 = args.get(6).and_then(|s| s.parse().ok()).unwrap_or(22050);
+            let tier = args.get(7).map(String::as_str).unwrap_or("adpcm").to_string();
+            match kbb::convert_sf2_to_kbb(input, name, rate, &tier) {
+                Ok(out) => match fs::write(output, out.kbb.render()) {
+                    Ok(()) => {
+                        println!("{}", out.report.render());
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("cannot write {output}: {e}");
+                        ExitCode::from(1)
+                    }
+                },
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "read" => {
+            let Some(target) = args.get(3) else {
+                eprintln!("usage: kohane-decoder kbb read <file.kbb>");
+                return ExitCode::from(2);
+            };
+            let buf = match fs::read(target) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {target}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            match kbb::read_kbb(&buf) {
+                Ok(doc) => {
+                    println!("{}", kbb::kbb_summary(&doc).render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        _ => {
+            eprintln!("usage: kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
+            eprintln!("       kohane-decoder kbb read <file.kbb>");
             ExitCode::from(2)
         }
     }

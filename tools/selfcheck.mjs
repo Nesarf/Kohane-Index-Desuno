@@ -2231,6 +2231,60 @@ section("rust cross-check");
         run.status === 1 && rustMessage === jsMessage,
         JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
     }
+
+    // The KBB bank: a SoundFont converted into kohane's own containers. The document must be
+    // byte-exact with the JS side's JSON.stringify output (key order, number formatting, base64
+    // payloads and all), the report field for field, the refusals sentence for sentence.
+    const realSf2 = "D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2";
+    if (fs.existsSync(realSf2)) {
+      const kbbMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kbb.mjs")).href);
+      const { convertSf2ToKbb, readKbb, kbbSummary } = kbbMod;
+      const jsOut = convertSf2ToKbb(realSf2);
+      const jsBytes = Buffer.from(JSON.stringify(jsOut.kbb), "utf8");
+      const out = path.join(TMP, "rust-x.kbb");
+      const run = spawnSync(rustBin, ["kbb", "convert", realSf2, out], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+      const rustBytes = fs.existsSync(out) ? fs.readFileSync(out) : Buffer.alloc(0);
+      ok("the rust kbb document is byte-exact with the JS document",
+        run.status === 0 && rustBytes.equals(jsBytes),
+        JSON.stringify({ js: jsBytes.length, rust: rustBytes.length, status: run.status }));
+      let r = null;
+      try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+      ok("the rust kbb report agrees with the JS report field for field",
+        r && r.sourceBytes === jsOut.report.sourceBytes && r.kbbBytes === jsOut.report.kbbBytes &&
+          r.ratio === jsOut.report.ratio && r.presets === jsOut.report.presets && r.zones === jsOut.report.zones &&
+          r.samples === jsOut.report.samples && r.uniqueSamples === jsOut.report.uniqueSamples && r.deduped === jsOut.report.deduped,
+        JSON.stringify({ js: jsOut.report, rust: r, status: run.status }));
+      {
+        const jsSummary = JSON.stringify(kbbSummary(jsOut.kbb));
+        const sRun = spawnSync(rustBin, ["kbb", "read", out], { encoding: "utf8", windowsHide: true });
+        const rustSummary = (sRun.stdout || "").trim();
+        ok("the rust kbb summary agrees with the JS summary string for string",
+          sRun.status === 0 && rustSummary === jsSummary,
+          JSON.stringify({ js: jsSummary, rust: rustSummary, status: sRun.status }));
+      }
+      const kbbRefuseCases = [
+        { name: "envelope", bad: () => Buffer.from("nope") },
+        { name: "marker", bad: () => Buffer.from('{"format":"nope"}') },
+        { name: "version", bad: () => Buffer.from('{"format":"kohane-bank","version":2}') },
+        { name: "presets", bad: () => Buffer.from('{"format":"kohane-bank","version":1,"presets":{}}') },
+        { name: "no-samples", bad: () => Buffer.from('{"format":"kohane-bank","version":1,"presets":[]}') },
+        { name: "payload", bad: () => Buffer.from('{"format":"kohane-bank","version":1,"presets":[],"samples":[{"name":"x","kba":""}]}') },
+      ];
+      for (const c of kbbRefuseCases) {
+        const badBytes = c.bad();
+        let jsMessage = "";
+        try { readKbb(badBytes); } catch (e) { jsMessage = e.message; }
+        const f = path.join(TMP, `rust-x-refuse-kbb-${c.name}.kbb`);
+        fs.writeFileSync(f, badBytes);
+        const run = spawnSync(rustBin, ["kbb", "read", f], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust kbb reader refuses ${c.name} with the JS sentence`,
+          run.status === 1 && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    } else {
+      ok("the rust kbb converter (skipped: no real SoundFont on this machine)", true, "skipped");
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {

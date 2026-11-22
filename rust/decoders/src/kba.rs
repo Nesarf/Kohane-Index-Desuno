@@ -30,6 +30,21 @@ fn pcm_le_bytes(pcm: &[i16]) -> Vec<u8> {
     v
 }
 
+/// One-pole low-pass then every-other-sample decimation: the honest 2:1 downsampling the JS side
+/// uses (kba.mjs downsample2). Math.round there is floor(x + 0.5), which differs from Rust's
+/// round() for negative halves, so the JS semantics are spelled out.
+pub fn downsample2(pcm: &[i16]) -> Vec<i16> {
+    let mut out = Vec::with_capacity(pcm.len() / 2);
+    let mut y: f64 = 0.0;
+    for (i, &x) in pcm.iter().enumerate() {
+        y += 0.25 * (x as f64 - y);
+        if i % 2 == 1 {
+            out.push((y + 0.5).floor() as i16);
+        }
+    }
+    out
+}
+
 /// Encode int16 PCM into a KBA container. `frames` in the header is the PCM length, exactly like
 /// the JS side: one frame is one sample in the interleaved stream.
 pub fn encode_kba(pcm: &[i16], tier: u8, sample_rate: u32, channels: u16) -> Result<Vec<u8>, String> {
