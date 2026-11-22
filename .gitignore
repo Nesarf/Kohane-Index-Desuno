@@ -49,3 +49,5 @@ workstation-unity/Build/
 workstation-unity/build/
 workstation-unity/Logs/
 workstation-unity/UserSettings/
+
+external/
