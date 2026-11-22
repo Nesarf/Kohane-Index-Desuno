@@ -47,7 +47,12 @@ export function readSf2(file, options = {}) {
   // other readers use would always miss them on any real font (hundreds of megabytes). The file is
   // already in memory, so the default walks to the end; an explicit limit still applies.
   const limit = Math.min(buf.length, options.limit || buf.length);
-  const out = { container: "sf2", size: buf.length, presets: [], instruments: [], samples: [], smplBytes: 0 };
+  const out = {
+    container: "sf2", size: buf.length,
+    presets: [], instruments: [], samples: [],
+    pbags: [], ibags: [], pgens: [], igens: [],
+    smplBytes: 0, smplAt: null,
+  };
 
   let at = 12;
   while (at + 8 <= limit) {
@@ -60,8 +65,10 @@ export function readSf2(file, options = {}) {
       const listType = fourcc(buf, body);
       if (listType === "sdta" || listType === "pdta") {
         walkList(buf, body + 4, end, (cid, cbody, cend) => {
-          if (cid === "smpl") out.smplBytes += cend - cbody;
-          else if (cid === "phdr" && cend - cbody >= 38) {
+          if (cid === "smpl") {
+            out.smplBytes += cend - cbody;
+            if (out.smplAt === null) out.smplAt = cbody;   // sample PCM lives here
+          } else if (cid === "phdr" && cend - cbody >= 38) {
             // Records of 38 bytes; the last one is the EOP terminator ('EOP' name, kept out).
             for (let p = cbody; p + 38 <= cend; p += 38) {
               const name = cstr(buf, p, 20);
@@ -94,6 +101,22 @@ export function readSf2(file, options = {}) {
                 pitchCorrection: buf.readInt8(p + 41),
                 sampleType: buf.readUInt16LE(p + 44),
               });
+            }
+          } else if (cid === "pbag" && cend - cbody >= 4) {
+            for (let p = cbody; p + 4 <= cend; p += 4) {
+              out.pbags.push({ genIndex: buf.readUInt16LE(p), genCount: buf.readUInt16LE(p + 2) });
+            }
+          } else if (cid === "ibag" && cend - cbody >= 4) {
+            for (let p = cbody; p + 4 <= cend; p += 4) {
+              out.ibags.push({ genIndex: buf.readUInt16LE(p), genCount: buf.readUInt16LE(p + 2) });
+            }
+          } else if (cid === "pgen" && cend - cbody >= 4) {
+            for (let p = cbody; p + 4 <= cend; p += 4) {
+              out.pgens.push({ oper: buf.readUInt16LE(p), amount: buf.readUInt16LE(p + 2) });
+            }
+          } else if (cid === "igen" && cend - cbody >= 4) {
+            for (let p = cbody; p + 4 <= cend; p += 4) {
+              out.igens.push({ oper: buf.readUInt16LE(p), amount: buf.readUInt16LE(p + 2) });
             }
           }
         });

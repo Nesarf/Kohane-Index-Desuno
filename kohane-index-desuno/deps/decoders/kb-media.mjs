@@ -21,6 +21,7 @@ const MARKERS = {
   kbs: "kohane-score",
   kbw: "kohane-wave",
   kbv: "kohane-view",
+  kbm: "kohane-mix",
 };
 const WAVES = ["sine", "square", "saw", "triangle", "noise"];
 
@@ -170,6 +171,79 @@ export function readKbv(buf) {
   };
 }
 
+// ---------------------------------------------------------------- .kbm mix
+
+export function writeKbm(mix = {}) {
+  const tracks = Array.isArray(mix.tracks) ? mix.tracks : [];
+  const buses = Array.isArray(mix.buses) ? mix.buses : [];
+  const cleanTrack = (t) => ({
+    name: isStr(t.name) && t.name ? t.name : "track",
+    gain: isNum(t.gain) ? t.gain : 1,
+    pan: isNum(t.pan) ? Math.max(-1, Math.min(1, t.pan)) : 0,
+    route: isStr(t.route) && t.route ? t.route : "master",
+    effects: Array.isArray(t.effects) ? t.effects.map((f) => ({ kind: String(f.kind || "?"), note: isStr(f.note) ? f.note : undefined })) : [],
+  });
+  const cleanBus = (b) => ({
+    name: isStr(b.name) && b.name ? b.name : "bus",
+    gain: isNum(b.gain) ? b.gain : 1,
+    effects: Array.isArray(b.effects) ? b.effects.map((f) => ({ kind: String(f.kind || "?"), note: isStr(f.note) ? f.note : undefined })) : [],
+  });
+  const master = mix.master && typeof mix.master === "object" ? mix.master : {};
+  const body = {
+    title: isStr(mix.title) && mix.title ? mix.title : "untitled mix",
+    sampleRate: isNum(mix.sampleRate) && mix.sampleRate > 0 ? mix.sampleRate : 44100,
+    tracks: tracks.map(cleanTrack),
+    buses: buses.map(cleanBus),
+    master: {
+      gain: isNum(master.gain) ? master.gain : 1,
+      effects: Array.isArray(master.effects) ? master.effects.map((f) => ({ kind: String(f.kind || "?"), note: isStr(f.note) ? f.note : undefined })) : [],
+    },
+  };
+  return seal("kbm", body);
+}
+
+export function readKbm(buf) {
+  const doc = open(buf, "kbm", "kohane mix");
+  if (!Array.isArray(doc.tracks)) throw new Error("not a kohane mix (tracks is not a list)");
+  if (!Array.isArray(doc.buses)) throw new Error("not a kohane mix (buses is not a list)");
+  if (!doc.master || typeof doc.master !== "object") throw new Error("not a kohane mix (master is not an object)");
+  const busNames = doc.buses.map((b) => String(b && b.name || ""));
+  const tracks = doc.tracks.map((t, i) => {
+    if (!t || typeof t !== "object") throw new Error(`not a kohane mix (track ${i} is not an object)`);
+    const gain = t.gain;
+    const pan = t.pan;
+    if (gain !== undefined && (!isNum(gain) || gain < 0)) throw new Error(`not a kohane mix (track ${i} gain is not a level)`);
+    if (pan !== undefined && (!isNum(pan) || pan < -1 || pan > 1)) throw new Error(`not a kohane mix (track ${i} pan is outside -1..1)`);
+    const route = isStr(t.route) && t.route ? t.route : "master";
+    if (route !== "master" && !busNames.includes(route)) throw new Error(`not a kohane mix (track ${i} routes to unknown bus "${route}")`);
+    return {
+      name: isStr(t.name) ? t.name : "track",
+      gain: gain === undefined ? 1 : gain,
+      pan: pan === undefined ? 0 : pan,
+      route,
+      effects: Array.isArray(t.effects) ? t.effects : [],
+    };
+  });
+  const buses = doc.buses.map((b, i) => {
+    if (!b || typeof b !== "object") throw new Error(`not a kohane mix (bus ${i} is not an object)`);
+    if (b.gain !== undefined && (!isNum(b.gain) || b.gain < 0)) throw new Error(`not a kohane mix (bus ${i} gain is not a level)`);
+    return {
+      name: isStr(b.name) ? b.name : "bus",
+      gain: b.gain === undefined ? 1 : b.gain,
+      effects: Array.isArray(b.effects) ? b.effects : [],
+    };
+  });
+  const master = doc.master;
+  if (master.gain !== undefined && (!isNum(master.gain) || master.gain < 0)) throw new Error("not a kohane mix (master gain is not a level)");
+  return {
+    format: doc.format, version: doc.version,
+    title: isStr(doc.title) ? doc.title : "untitled mix",
+    sampleRate: isNum(doc.sampleRate) && doc.sampleRate > 0 ? doc.sampleRate : 44100,
+    tracks, buses,
+    master: { gain: master.gain === undefined ? 1 : master.gain, effects: Array.isArray(master.effects) ? master.effects : [] },
+  };
+}
+
 // ---------------------------------------------------------------- registry face
 
 const kbsCapabilities = {
@@ -202,4 +276,14 @@ const kbvCapabilities = {
   verifiedAgainst: "the selfcheck kpb media section: write/read round trip, lane and palette checks",
 };
 
-export const capabilities = [kbsCapabilities, kbwCapabilities, kbvCapabilities];
+const kbmCapabilities = {
+  id: "kbm",
+  kohaneName: "Kohane Bassline Mix",
+  container: "kbm",
+  read: { level: "full", detail: "the mix document: tracks with gain/pan/route, buses with gain, master gain, and the declared effect chains" },
+  decode: { level: "none", detail: "a mix is instructions, not audio: the mixer renders stems through it (deps/decoders/mix.mjs)" },
+  encode: { level: "full", detail: "writes the .kbm mix document" },
+  verifiedAgainst: "the selfcheck kpb mix (stage 4) section: write/read round trip, route validation against declared buses, and the mixer's own verified judges",
+};
+
+export const capabilities = [kbsCapabilities, kbwCapabilities, kbvCapabilities, kbmCapabilities];

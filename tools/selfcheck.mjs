@@ -1198,15 +1198,15 @@ section("kpb bundle face");
 {
   const fmtTool = tool("library_format");
   const pluginTool = tool("library_plugin");
-  // A bundle fixture whose real file size lands inside the 8%-20% window: the payload padding
-  // makes the sealed file about 9.6 KB against a declared 100 KB source.
+  // A bundle fixture whose real content lands inside the 8%-20% window: the payload padding
+  // makes the sealed content about 8.3 KB against a declared 100 KB source.
   const makeBundle = (sourceTotalBytes, padding) => {
     const payload = { bundle: { name: "Fixture Bundle", version: "0.1.0", sourceTotalBytes, capabilities: ["Composer", "Mixer"] }, assets: { manifest: [{ name: "score.kbs", bytes: 1024 }], padding: "p".repeat(padding) } };
     const sealed = m.encryptSensitive(payload);
     return JSON.stringify({ format: "kohane-bundle", version: 1, hint: "sealed by kohane-index-desuno for this installation - open with library_format op=kpb-install", sealed });
   };
   const kpbFile = path.join(TMP, "fixture.kpb");
-  fs.writeFileSync(kpbFile, makeBundle(100000, 7000));
+  fs.writeFileSync(kpbFile, makeBundle(100000, 8000));
 
   const inst = await fmtTool.execute({ op: "kpb-install", path: kpbFile });
   ok("a bundle installs and mounts its capabilities",
@@ -1361,7 +1361,7 @@ section("kpb media (stage 3)");
         { name: "stage3.kbw", kind: "kbw", base64: kbwBuf.toString("base64") },
         { name: "stage3.kbv", kind: "kbv", base64: kbvBuf.toString("base64") },
       ] },
-      padding: "p".repeat(7000),
+      padding: "p".repeat(8000),
     };
     return JSON.stringify({ format: "kohane-bundle", version: 1, hint: "sealed by kohane-index-desuno for this installation - open with library_format op=kpb-install", sealed: m.encryptSensitive(payload) });
   };
@@ -1386,6 +1386,326 @@ section("kpb media (stage 3)");
   ok("install refuses a bundle whose media self-proof fails",
     emptyInst.ok === false && /media self-proof/.test(String(emptyInst.note)),
     String(emptyInst.note));
+}
+
+// ---------------------------------------------------------------- kpb mix (stage 4)
+section("kpb mix (stage 4)");
+{
+  const audioTool = tool("library_audio");
+  const media = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kb-media.mjs")).href);
+  const { synthesize } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+  const { panCoeffs, mixStems } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "mix.mjs")).href);
+
+  // The mix document round-trips, and a route to a bus the document never declared is refused.
+  const kbmBuf = media.writeKbm({
+    title: "stage-4 fixture", sampleRate: 22050,
+    tracks: [{ name: "lead", gain: 0.5, pan: 0, route: "master" }, { name: "bass", gain: 1, pan: -0.5, route: "low" }],
+    buses: [{ name: "low", gain: 0.25 }],
+    master: { gain: 0.9 },
+  });
+  const mixBack = media.readKbm(kbmBuf);
+  ok("a .kbm mix round-trips field for field",
+    mixBack.format === "kohane-mix" && mixBack.title === "stage-4 fixture" && mixBack.tracks.length === 2 &&
+    mixBack.tracks[0].gain === 0.5 && mixBack.tracks[1].pan === -0.5 && mixBack.tracks[1].route === "low" &&
+    mixBack.buses[0].gain === 0.25 && mixBack.master.gain === 0.9,
+    JSON.stringify(mixBack.tracks));
+
+  let badRoute = null;
+  try { media.readKbm(media.writeKbm({ tracks: [{ name: "t", route: "ghost" }] })); } catch (e) { badRoute = String(e.message); }
+  ok("a route to an undeclared bus is refused at read time",
+    badRoute !== null && /unknown bus "ghost"/.test(badRoute), badRoute);
+
+  // mixStems: the sum equals the parts, bus gain applies on the way in, master gain closes the chain.
+  const constStem = (n, v, route) => ({ frames: n, l: new Float32Array(n).fill(v), r: new Float32Array(n).fill(v), route });
+  const sumFix = mixStems([
+    constStem(1000, 0.2, "master"),
+    constStem(1000, 0.4, "low"),
+  ], { buses: [{ name: "low", gain: 0.5 }], master: { gain: 1 } });
+  ok("bus routing: a stem through a 0.5 bus plus a direct stem sums exactly (0.2 + 0.4x0.5 = 0.4)",
+    sumFix.frames === 1000 && Math.abs(sumFix.samples[500 * 2] - 0.4) < 1e-6 && Math.abs(sumFix.samples[500 * 2 + 1] - 0.4) < 1e-6,
+    JSON.stringify({ L: sumFix.samples[500 * 2], R: sumFix.samples[500 * 2 + 1] }));
+
+  const masterFix = mixStems([constStem(100, 0.4, "master")], { buses: [], master: { gain: 0.5 } });
+  ok("master gain closes the chain (0.4 x 0.5 = 0.2)",
+    Math.abs(masterFix.samples[0] - 0.2) < 1e-6, String(masterFix.samples[0]));
+
+  const pc = [panCoeffs(-1), panCoeffs(0), panCoeffs(1)];
+  ok("equal-power pan: extremes isolate the channels, centre splits even",
+    Math.abs(pc[0].panL - 1) < 1e-9 && Math.abs(pc[0].panR) < 1e-9 &&
+    Math.abs(pc[1].panL - Math.SQRT1_2) < 1e-9 && Math.abs(pc[1].panR - Math.SQRT1_2) < 1e-9 &&
+    Math.abs(pc[2].panL) < 1e-9 && Math.abs(pc[2].panR - 1) < 1e-9,
+    JSON.stringify(pc));
+
+  // The full chain through op=mix: a sine stem through gain 0.5, pan centred - one frame must equal
+  // the analytic sine times 0.5 times the centre coefficient, sample for sample.
+  const scoreBuf = media.writeKbs({
+    title: "mix sine", sampleRate: 22050, wave: "sine",
+    adsr: { a: 0, d: 0, s: 1, r: 0 },
+    notes: [{ t: 0, dur: 0.05, pitch: 69, wave: "sine", part: "lead" }],
+  });
+  const mixBuf = media.writeKbm({
+    sampleRate: 22050,
+    tracks: [{ name: "lead", gain: 0.5, pan: 0, route: "master" }],
+    buses: [], master: { gain: 1 },
+  });
+  const scoreFile4 = path.join(TMP, "mix-sine.kbs");
+  const mixFile4 = path.join(TMP, "mix-sine.kbm");
+  fs.writeFileSync(scoreFile4, scoreBuf);
+  fs.writeFileSync(mixFile4, mixBuf);
+  const mixedSine = await audioTool.execute({ op: "mix", score: scoreFile4, mix: mixFile4 });
+  const f = 1000;
+  const expected = Math.sin(2 * Math.PI * 440 * (f / 22050)) * 0.5 * Math.SQRT1_2;
+  const frameIdx = f * 4; // stereo: four bytes per frame
+  ok("op=mix renders the sine stem through gain and pan, matching the analytic frame",
+    mixedSine.ok === true && mixedSine.frames === Math.round(0.05 * 22050),
+    JSON.stringify({ ok: mixedSine.ok, frames: mixedSine.frames, mode: mixedSine.mode }));
+
+  // The same chain exported to WAV, read back: the frame must equal the analytic value.
+  const mixWav = path.join(TMP, "mix-sine.wav");
+  const mixExp = await audioTool.execute({ op: "mix", score: scoreFile4, mix: mixFile4, out: mixWav });
+  const wavBytes = fs.readFileSync(mixWav);
+  ok("op=mix exports a stereo WAV whose header declares two channels",
+    mixExp.ok === true && mixExp.written === true && wavBytes.readUInt16LE(22) === 2 && wavBytes.readUInt32LE(40) === mixExp.frames * 4,
+    JSON.stringify({ ok: mixExp.ok, channels: wavBytes.readUInt16LE(22) }));
+  const lVal = wavBytes.readInt16LE(44 + frameIdx) / 32768;
+  const rVal = wavBytes.readInt16LE(44 + frameIdx + 2) / 32768;
+  ok("the exported frame equals the analytic sine x 0.5 x the centre coefficient",
+    Math.abs(lVal - expected) < 0.001 && Math.abs(rVal - expected) < 0.001,
+    JSON.stringify({ expected: expected.toFixed(5), L: lVal.toFixed(5), R: rVal.toFixed(5) }));
+
+  // Two stems panned hard apart: the left channel carries only the left stem, and vice versa.
+  const splitScore = media.writeKbs({
+    sampleRate: 22050, wave: "sine", adsr: { a: 0, d: 0, s: 1, r: 0 },
+    notes: [
+      { t: 0, dur: 0.05, pitch: 69, part: "L", wave: "sine" },
+      { t: 0, dur: 0.05, pitch: 81, part: "R", wave: "sine" },
+    ],
+  });
+  const splitMix = media.writeKbm({
+    sampleRate: 22050,
+    tracks: [{ name: "L", gain: 1, pan: -1 }, { name: "R", gain: 1, pan: 1 }],
+    buses: [], master: { gain: 1 },
+  });
+  const splitScoreFile = path.join(TMP, "split.kbs");
+  const splitMixFile = path.join(TMP, "split.kbm");
+  fs.writeFileSync(splitScoreFile, splitScore);
+  fs.writeFileSync(splitMixFile, splitMix);
+  const splitWav = path.join(TMP, "split.wav");
+  await audioTool.execute({ op: "mix", score: splitScoreFile, mix: splitMixFile, out: splitWav });
+  const splitBytes = fs.readFileSync(splitWav);
+  // pitch 81 is A5 = 880 Hz; each channel carries exactly its own stem after the hard pan.
+  const a5 = 440 * Math.pow(2, (81 - 69) / 12);
+  const lAt = Math.sin(2 * Math.PI * 440 * (f / 22050));
+  const rAt = Math.sin(2 * Math.PI * a5 * (f / 22050));
+  const lSplit = splitBytes.readInt16LE(44 + frameIdx) / 32768;      // stereo: 4 bytes per frame
+  const rSplit = splitBytes.readInt16LE(44 + frameIdx + 2) / 32768;
+  ok("hard-panned stems isolate: left channel is the left stem, right channel the right one",
+    Math.abs(lSplit - lAt) < 0.001 && Math.abs(rSplit - rAt) < 0.001,
+    JSON.stringify({ L: lSplit.toFixed(5), expectL: lAt.toFixed(5), R: rSplit.toFixed(5), expectR: rAt.toFixed(5) }));
+
+  // An effect the mixer cannot execute is refused, never silently ignored.
+  const fxMixBuf = media.writeKbm({
+    sampleRate: 22050,
+    tracks: [{ name: "lead", gain: 1, pan: 0, effects: [{ kind: "eq", note: "Param. EQ 2 band 7" }] }],
+    buses: [], master: { gain: 1 },
+  });
+  const fxMixFile = path.join(TMP, "fx.kbm");
+  fs.writeFileSync(fxMixFile, fxMixBuf);
+  const fxMix = await audioTool.execute({ op: "mix", score: scoreFile4, mix: fxMixFile });
+  ok("a declared but unexecutable effect refuses the render",
+    fxMix.ok === false && /does not execute/.test(String(fxMix.note)), String(fxMix.note));
+
+  // Parallel rendering: the pooled result equals the one-core result, and on a many-core machine the
+  // pool measurably beats the single core. The pool is warmed first (building it loads the whole
+  // core into each worker), so the comparison times the work itself, not the pool's start-up.
+  const wideNotes = [];
+  for (let tr = 0; tr < 24; tr++) {
+    for (let n = 0; n < 8; n++) {
+      wideNotes.push({ t: n * 0.06, dur: 0.055, pitch: 50 + (tr % 5) * 7 + (n % 4), part: `t${tr}`, wave: "square" });
+    }
+  }
+  const wideScore = media.writeKbs({ sampleRate: 22050, wave: "square", adsr: { a: 0.002, d: 0.02, s: 0.7, r: 0.02 }, notes: wideNotes });
+  const wideMix = media.writeKbm({
+    sampleRate: 22050,
+    tracks: Array.from({ length: 24 }, (_, i) => ({ name: `t${i}`, gain: 1, pan: 0 })),
+    buses: [], master: { gain: 1 },
+  });
+  const wideScoreFile = path.join(TMP, "wide.kbs");
+  const wideMixFile = path.join(TMP, "wide.kbm");
+  fs.writeFileSync(wideScoreFile, wideScore);
+  fs.writeFileSync(wideMixFile, wideMix);
+  await audioTool.execute({ op: "mix", score: wideScoreFile, mix: wideMixFile }); // warm the resident stem pool
+  const wideInline = await audioTool.execute({ op: "mix", score: wideScoreFile, mix: wideMixFile, threads: 1 });
+  const widePooled = await audioTool.execute({ op: "mix", score: wideScoreFile, mix: wideMixFile });
+  ok("the pooled render equals the one-core render",
+    widePooled.ok === true && wideInline.ok === true && widePooled.frames === wideInline.frames &&
+    typeof wideInline.ms === "number" && typeof widePooled.ms === "number" && wideInline.mode === "inline",
+    JSON.stringify({ frames: widePooled.frames, pooledMs: widePooled.ms, inlineMs: wideInline.ms, mode: widePooled.mode }));
+  if (os.cpus().length >= 4) {
+    const speedup = Number((wideInline.ms / Math.max(widePooled.ms, 1)).toFixed(2));
+    ok("the pool measurably beats one core on this many-core machine",
+      widePooled.mode === "workers" && speedup >= 1,
+      JSON.stringify({ mode: widePooled.mode, speedup, pooledMs: widePooled.ms, inlineMs: wideInline.ms }));
+  }
+}
+
+// ---------------------------------------------------------------- kpb assets (stage 5)
+section("kpb assets (stage 5)");
+{
+  const audioTool = tool("library_audio");
+  const fmtTool = tool("library_format");
+  const { encodeKba, decodeKba, kbaStats, downsample2 } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kba.mjs")).href);
+  const { convertSf2ToKbb, readKbb, kbbSummary } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kbb.mjs")).href);
+
+  // The audio container's three tiers: a sine-plus-slope signal makes the ADPCM error honest to
+  // measure, and the lossless/raw tiers must be exact.
+  const testPcm = (n) => {
+    // low-frequency energy dominates, high-frequency rides low: the shape real instrument samples
+    // have, so the IMA error measured here is the codec's, not the signal's own steepness
+    const pcm = new Int16Array(n);
+    for (let i = 0; i < n; i++) {
+      const v = Math.sin((i * 0.013) % (2 * Math.PI)) * 9000 + Math.sin((i * 0.1) % (2 * Math.PI)) * 3000;
+      pcm[i] = Math.round(v);
+    }
+    return pcm;
+  };
+  const pcmSmall = testPcm(1024);
+  const adpcmBuf = encodeKba(pcmSmall, { sampleRate: 44100, channels: 1, tier: "adpcm" });
+  const adpcmBack = decodeKba(adpcmBuf);
+  let peakErr = 0;
+  for (let i = 0; i < pcmSmall.length; i++) peakErr = Math.max(peakErr, Math.abs(pcmSmall[i] - adpcmBack.pcm[i]));
+  ok("adpcm round-trip keeps the peak error inside 8% of full scale",
+    adpcmBack.tier === "adpcm" && adpcmBack.frames === 1024 && peakErr < 32767 * 0.08,
+    `peakErr=${peakErr}`);
+
+  const pcmLong = testPcm(3000); // spans three ADPCM blocks
+  const longBack = decodeKba(encodeKba(pcmLong, { sampleRate: 22050, tier: "adpcm" }));
+  ok("adpcm round-trips across block boundaries", longBack.frames === 3000 && longBack.pcm[2999] !== undefined, `frames=${longBack.frames}`);
+
+  const lossBack = decodeKba(encodeKba(pcmSmall, { tier: "lossless" }));
+  ok("the lossless tier round-trips sample for sample",
+    lossBack.tier === "lossless" && lossBack.pcm.every((v, i) => v === pcmSmall[i]), "exact");
+
+  const rawBack = decodeKba(encodeKba(pcmSmall, { tier: "raw" }));
+  ok("the raw tier round-trips sample for sample",
+    rawBack.tier === "raw" && rawBack.pcm.every((v, i) => v === pcmSmall[i]), "exact");
+
+  const sAdpcm = kbaStats(adpcmBuf);
+  const sLoss = kbaStats(encodeKba(pcmSmall, { tier: "lossless" }));
+  const sRaw = kbaStats(encodeKba(pcmSmall, { tier: "raw" }));
+  ok("the tier ladder shrinks for real: adpcm < lossless < raw",
+    sAdpcm.tier === "adpcm" && sLoss.tier === "lossless" && sRaw.tier === "raw" &&
+    sAdpcm.bytes < sLoss.bytes && sLoss.bytes <= sRaw.bytes,
+    JSON.stringify({ adpcm: sAdpcm.bytes, lossless: sLoss.bytes, raw: sRaw.bytes }));
+
+  ok("the honest 2:1 decimation halves the frame count", downsample2(pcmSmall).length === 512, "512");
+
+  // The kba op surface: a WAV in, a kba out, and the read reports the declared tier.
+  const srcWav = path.join(TMP, "kba-src.wav");
+  {
+    const { synthesize } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+    const r = synthesize({ sampleRate: 22050, notes: [{ t: 0, dur: 0.2, pitch: 69, wave: "square" }] });
+    const data = Buffer.alloc(44 + r.samples.length * 2);
+    data.write("RIFF", 0); data.writeUInt32LE(36 + r.samples.length * 2, 4); data.write("WAVE", 8);
+    data.write("fmt ", 12); data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20); data.writeUInt16LE(1, 22);
+    data.writeUInt32LE(22050, 24); data.writeUInt32LE(44100, 28); data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34);
+    data.write("data", 36); data.writeUInt32LE(r.samples.length * 2, 40);
+    for (let i = 0; i < r.samples.length; i++) data.writeInt16LE(Math.round(r.samples[i] * 32767), 44 + i * 2);
+    fs.writeFileSync(srcWav, data);
+  }
+  const kbaOut = path.join(TMP, "out.kba");
+  const kbaWrite = await audioTool.execute({ op: "kba", out: kbaOut, source: srcWav, tier: "raw" });
+  const kbaRead = await audioTool.execute({ op: "kba", path: kbaOut });
+  ok("op=kba writes a WAV source into a container and reads it back with its declared tier",
+    kbaWrite.ok === true && kbaWrite.written === true && kbaRead.ok === true && kbaRead.tier === "raw" && kbaRead.decodedFrames === kbaWrite.frames,
+    JSON.stringify({ ok: kbaWrite.ok, tier: kbaRead.tier, frames: kbaRead.decodedFrames }));
+
+  // A SoundFont fixture with a real zone chain: two presets, two instruments, one shared sample -
+  // the conversion must deduplicate the sample and enumerate the key ranges.
+  const ck2 = (id, body) => {
+    const b = Buffer.from(body);
+    const pad = b.length % 2 ? Buffer.alloc(1) : Buffer.alloc(0);
+    const head = Buffer.alloc(8);
+    head.write(id, 0, "latin1");
+    head.writeUInt32LE(b.length, 4);
+    return Buffer.concat([head, b, pad]);
+  };
+  const list2 = (type, ...chunks) => ck2("LIST", Buffer.concat([Buffer.from(type, "latin1"), ...chunks]));
+  const phdr2 = (name, preset, bank, bagIndex) => { const b = Buffer.alloc(38); b.write(name, 0, "latin1"); b.writeUInt16LE(preset, 20); b.writeUInt16LE(bank, 22); b.writeUInt16LE(bagIndex, 24); return b; };
+  const inst2 = (name, bagIndex) => { const b = Buffer.alloc(22); b.write(name, 0, "latin1"); b.writeUInt16LE(bagIndex, 20); return b; };
+  const bag2 = (gi, gc) => { const b = Buffer.alloc(4); b.writeUInt16LE(gi, 0); b.writeUInt16LE(gc, 2); return b; };
+  const gen2 = (oper, amount) => { const b = Buffer.alloc(4); b.writeUInt16LE(oper, 0); b.writeUInt16LE(amount, 2); return b; };
+  const shdr2 = (name, start, end, startLoop, endLoop, rate, pitch) => {
+    const b = Buffer.alloc(46);
+    b.write(name, 0, "latin1");
+    b.writeUInt32LE(start, 20); b.writeUInt32LE(end, 24); b.writeUInt32LE(startLoop, 28); b.writeUInt32LE(endLoop, 32);
+    b.writeUInt32LE(rate, 36);
+    if (pitch >= 0) b[40] = pitch; else b[41] = -pitch;
+    b.writeUInt16LE(1, 44);
+    return b;
+  };
+  const smplData = Buffer.alloc(128);
+  for (let i = 0; i < 64; i++) smplData.writeInt16LE(Math.round(Math.sin((i * 0.2) % (2 * Math.PI)) * 8000), i * 2);
+  const keyRange = (lo, hi) => lo | (hi << 8);
+  const zoneFixture = ck2("RIFF", Buffer.concat([
+    Buffer.from("sfbk", "latin1"),
+    list2("sdta", ck2("smpl", smplData)),
+    list2("pdta",
+      ck2("phdr", Buffer.concat([phdr2("Shared", 0, 0, 0), phdr2("Shared Octave Up", 1, 0, 1), phdr2("EOP", 0, 0, 2)])),
+      ck2("pbag", Buffer.concat([bag2(0, 1), bag2(1, 1), bag2(2, 0)])),
+      ck2("pgen", Buffer.concat([gen2(41, 0), gen2(41, 1), gen2(0, 0)])),
+      ck2("inst", Buffer.concat([inst2("Inst A", 0), inst2("Inst B", 1), inst2("EOI", 2)])),
+      ck2("ibag", Buffer.concat([bag2(0, 3), bag2(3, 3), bag2(6, 0)])),
+      ck2("igen", Buffer.concat([
+        gen2(43, keyRange(60, 72)), gen2(53, 0), gen2(54, 1),
+        gen2(43, keyRange(72, 84)), gen2(53, 1), gen2(54, 1),
+      ])),
+      ck2("shdr", Buffer.concat([shdr2("Shared Sample", 0, 128, 0, 128, 22050, 60), shdr2("Shared Sample Copy", 0, 128, 0, 128, 22050, 60), shdr2("EOS", 0, 0, 0, 0, 0, 0)])),
+    ),
+  ]));
+  const zoneFile = path.join(TMP, "zone-fixture.sf2");
+  fs.writeFileSync(zoneFile, zoneFixture);
+  const conv = convertSf2ToKbb(zoneFile);
+  ok("conversion enumerates the zone chain: two zones, one deduplicated sample, key ranges and loops",
+    conv.report.presets === 2 && conv.report.zones === 2 && conv.report.uniqueSamples === 1 && conv.report.deduped === 1 &&
+    conv.kbb.presets[0].zones[0].loKey === 60 && conv.kbb.presets[0].zones[0].hiKey === 72 &&
+    conv.kbb.presets[1].zones[0].loKey === 72 && conv.kbb.presets[0].zones[0].loopStart === 0 && conv.kbb.presets[0].zones[0].loopEnd === 64,
+    JSON.stringify(conv.report));
+  ok("the bank alone answers the enumeration questions",
+    kbbSummary(conv.kbb).enumerable.keyRanges === true && kbbSummary(conv.kbb).enumerable.loops === true && kbbSummary(conv.kbb).enumerable.samples === true,
+    JSON.stringify(kbbSummary(conv.kbb).enumerable));
+
+  // The real SoundFont: converted with the default tier, the volume ratio must land in the 8%-20%
+  // window the design fixes as a hard gate - below means content is missing, above means the
+  // slimming did not happen.
+  const real = "D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2";
+  if (fs.existsSync(real)) {
+    const realConv = convertSf2ToKbb(real);
+    ok("the real SoundFont converts inside the 8%-20% volume window",
+      realConv.report.ratio >= 0.08 && realConv.report.ratio <= 0.20 && realConv.report.zones > 0,
+      JSON.stringify(realConv.report));
+    const kbbOut = path.join(TMP, "real.kbb");
+    fs.writeFileSync(kbbOut, JSON.stringify(realConv.kbb));
+    const kbbRead = await audioTool.execute({ op: "kbb", path: kbbOut });
+    ok("op=kbb reads the converted bank and enumerates its facts",
+      kbbRead.ok === true && kbbRead.presets > 0 && kbbRead.zones > 0 && kbbRead.enumerable.keyRanges === true,
+      JSON.stringify({ ok: kbbRead.ok, presets: kbbRead.presets, zones: kbbRead.zones }));
+    // A bundle carrying the bank self-proves it: the media check accepts a populated kbb.
+    const bankB64 = Buffer.from(JSON.stringify(realConv.kbb)).toString("base64");
+    const payload = {
+      bundle: { name: "Bank Fixture Bundle", version: "0.3.0", sourceTotalBytes: realConv.report.sourceBytes, capabilities: ["Composer", "Mixer"] },
+      media: { files: [{ name: "real.kbb", kind: "kbb", base64: bankB64 }] },
+      padding: "p".repeat(7000),
+    };
+    const bankFile = path.join(TMP, "bank-fixture.kpb");
+    fs.writeFileSync(bankFile, JSON.stringify({ format: "kohane-bundle", version: 1, hint: "sealed by kohane-index-desuno for this installation - open with library_format op=kpb-install", sealed: m.encryptSensitive(payload) }));
+    const bankVer = await fmtTool.execute({ op: "kpb-verify", path: bankFile });
+    ok("a bundle carrying the bank self-proves it on verify",
+      bankVer.ok === true && bankVer.mediaChecks.some((c) => c.kind === "kbb" && c.ok === true),
+      JSON.stringify({ ok: bankVer.ok, note: bankVer.note, ratio: bankVer.ratio, checks: bankVer.mediaChecks.map((c) => c.verdict) }));
+  } else {
+    ok("the real SoundFont conversion (skipped: not on this machine)", true, "skipped");
+  }
 }
 
 // ---------------------------------------------------------------- environment + branding

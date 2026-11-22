@@ -33,7 +33,10 @@ import { readOgg } from "../deps/decoders/ogg.mjs";
 import { readRiff } from "../deps/decoders/riff.mjs";
 import { encodeFlac, encodeWav16 } from "../deps/decoders/flac-encoder.mjs";
 import { synthesize } from "../deps/decoders/synth.mjs";
-import { readKbs, writeKbs, replayKbs, readKbw, writeKbw, readKbv, writeKbv } from "../deps/decoders/kb-media.mjs";
+import { readKbs, writeKbs, replayKbs, readKbw, writeKbw, readKbv, writeKbv, readKbm, writeKbm } from "../deps/decoders/kb-media.mjs";
+import { panCoeffs, mixStems, assertRenderable } from "../deps/decoders/mix.mjs";
+import { encodeKba, decodeKba, kbaStats } from "../deps/decoders/kba.mjs";
+import { convertSf2ToKbb, readKbb, kbbSummary } from "../deps/decoders/kbb.mjs";
 import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
@@ -2467,7 +2470,7 @@ function assessFile(filePath) {
 // over independent items - hashing files, measuring waveforms, rendering stems - goes through this
 // pool instead of a for loop. A worker is this same module re-entered with a marker in workerData, so
 // the package stays a single file and there is no second entry point to keep in sync.
-const KB_WORKER_TASKS = new Set(["peaks", "hash"]);
+const KB_WORKER_TASKS = new Set(["peaks", "hash", "stems"]);
 
 function availableCores() {
   if (!WORKERS_AVAILABLE) return 1;   // no worker threads here: the inline path
@@ -2488,7 +2491,24 @@ function runWorkerTask(name, item) {
     // file's identity" would eventually disagree, and every file would read as changed.
     return { path: item.path, digest: sha256File(item.path, item.maxBytes || 16 * 1024 * 1024) };
   }
+  if (name === "stems") return renderStemTask(item);
   throw new Error(`unknown worker task: ${name}`);
+}
+
+// One stem = one track synthesised and panned independently. The sum is linear and happens once,
+// in the caller; the expensive per-track work is what the pool spreads across cores.
+function renderStemTask(item) {
+  const rendered = synthesize({ sampleRate: item.sampleRate, notes: item.notes, wave: item.wave, adsr: item.adsr });
+  const { panL, panR } = panCoeffs(item.pan);
+  const gain = Number.isFinite(item.gain) ? item.gain : 1;
+  const frames = rendered.frames;
+  const l = new Float32Array(frames);
+  const r = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    l[i] = rendered.samples[i] * gain * panL;
+    r[i] = rendered.samples[i] * gain * panR;
+  }
+  return { frames, l, r };
 }
 
 /**
@@ -4753,11 +4773,11 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw" },
-      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw: one .kbs score or .kbw envelope to read" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb" },
+      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read" },
       dir: { type: "string", description: "sweep: a directory to walk for audio files" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
-      threads: { type: "number", description: "sweep: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
+      threads: { type: "number", description: "sweep/mix: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
       compare: { type: "boolean", description: "sweep: also run the same work on one core and report the speed-up" },
       maxFiles: { type: "number", description: "sweep: cap on files inspected; default 500, max 5000" },
       notes: { type: "array", description: "synth: note events [{t, dur, pitch, vel?, wave?}], t/dur in seconds, pitch as a MIDI key; kbs: the note list to write into the .kbs score" },
@@ -4772,7 +4792,14 @@ const TOOL_INPUT_SCHEMAS = {
       bucketSize: { type: "number", description: "kbw: samples per min/max bucket when writing an envelope; default 512" },
       channelCount: { type: "number", description: "kbw: channel count recorded in the envelope; default 1" },
       layout: { type: "object", description: "kbs: when out is given, also write a companion .kbv view - {lanes, octaveLines, palette}" },
-      out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key); kbs: the .kbs score destination; kbw: the .kbw envelope destination" },
+      score: { type: "string", description: "mix: the .kbs score to render through the mix; notes route to the track whose name equals their part, notes without a part go to the first track" },
+      mix: { type: "string", description: "mix: the .kbm mix document whose gain/pan/bus routing is applied" },
+      tracks: { type: "array", description: "kbm: the track list to write - [{name, gain, pan, route, effects?}]" },
+      buses: { type: "array", description: "kbm: the bus list to write - [{name, gain, effects?}]" },
+      master: { type: "object", description: "kbm: the master strip - {gain, effects?}" },
+      tier: { type: "string", description: "kba/kbb: the storage tier - adpcm (default) | lossless | raw; the tier is the volume knob" },
+      targetRate: { type: "number", description: "kbb: sample rate the converted samples are downsampled toward (default 22050); sources at least twice the target take the honest 2:1 low-pass decimation" },
+      out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key); kbs: the .kbs score destination; kbw: the .kbw envelope destination; mix: the mixed WAV/FLAC destination" },
       format: { type: "string", description: "synth: wav | flac, used when out is given and the extension says nothing" },
       dryRun: { type: "boolean", description: "synth: report without writing when out is given" },
     },
@@ -5976,6 +6003,162 @@ const TOOLS = [
         }
       }
 
+      if (op === "kbm") {
+        // The mix document: gain/pan/bus routing with declared effect chains. The mixer renders
+        // stems through it; anything declared but not executable is refused, so the exported audio
+        // always equals the document.
+        if (args.out) {
+          try {
+            const buf = writeKbm({ title: args.title, sampleRate: args.sampleRate, tracks: args.tracks, buses: args.buses, master: args.master });
+            if (args.dryRun) return { ok: true, op, out: args.out, bytes: buf.length, written: false, note: "dryRun: the .kbm mix was not written" };
+            fs.writeFileSync(String(args.out), buf);
+            return { ok: true, op, out: args.out, bytes: buf.length, written: true, note: "written: the mix document declares gain/pan/bus routing; the mixer renders stems through it" };
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kbm needs a .kbm path to read, or --out with tracks to write one" };
+        try {
+          return Object.assign({ ok: true, op, path: args.path }, readKbm(fs.readFileSync(String(args.path))));
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
+      if (op === "mix") {
+        // Stem-by-stem rendering: each track of the score is synthesised on its own core, then the
+        // stems are summed through the mix's gain/pan/bus routing. Notes route by part name into the
+        // matching track; notes without a part take the first track.
+        if (!args.score) return { ok: false, op, note: "mix needs --score (a .kbs file)" };
+        if (!args.mix) return { ok: false, op, note: "mix needs --mix (a .kbm file)" };
+        try {
+          const score = readKbs(fs.readFileSync(String(args.score)));
+          const mixDoc = readKbm(fs.readFileSync(String(args.mix)));
+          if (!mixDoc.tracks.length) return { ok: false, op, note: "the mix declares no tracks" };
+          assertRenderable(mixDoc);
+          const groups = mixDoc.tracks.map((t) => ({ track: t, notes: [] }));
+          const byName = new Map(mixDoc.tracks.map((t, i) => [t.name, groups[i]]));
+          const first = groups[0];
+          for (const n of score.notes) {
+            const g = n.part !== undefined ? (byName.get(String(n.part)) || first) : first;
+            g.notes.push(n);
+          }
+          const sampleRate = mixDoc.sampleRate || score.sampleRate || 44100;
+          const items = groups.map((g) => ({
+            sampleRate, notes: g.notes, wave: score.wave, adsr: score.adsr,
+            gain: g.track.gain, pan: g.track.pan, route: g.track.route,
+          }));
+          const threads = Math.min(Math.max(Number(args.threads) || availableCores(), 1), 64);
+          const started = Date.now();
+          const pooled = await poolMap(items, "stems", { threads, label: "audio-stems", minItems: 2 });
+          const stems = pooled.results.map((r, i) => ({ frames: r.frames, l: r.l, r: r.r, route: items[i].route }));
+          const mixed = mixStems(stems, mixDoc, { sampleRate });
+          // ms covers the whole chain - render every stem and sum them - so a single-core run and a
+          // pooled run are comparable end to end; poolMs is the mapping part alone.
+          const ms = Date.now() - started;
+          const receipt = {
+            ok: true, op, score: args.score, mix: args.mix, tracks: mixDoc.tracks.length,
+            sampleRate, frames: mixed.frames, durationSec: Math.round((mixed.frames / sampleRate) * 1000) / 1000,
+            channels: 2, threads: pooled.threads, mode: pooled.mode, ms, poolMs: pooled.ms,
+            note: "each stem was rendered on its own core and summed through the mix's gain/pan/bus routing; the exported audio equals the mix document because anything the mixer cannot execute is refused",
+          };
+          if (args.out) {
+            const out = String(args.out);
+            const asked = String(args.format || "").toLowerCase();
+            const fromExtension = path.extname(out).replace(/^\./, "").toLowerCase();
+            const format = asked || fromExtension;
+            if (!["wav", "flac"].includes(format)) {
+              return { ok: false, op, note: `unknown mix format "${asked || fromExtension || "(none)"}", allowed: wav, flac` };
+            }
+            const options = { sampleRate, channels: 2 };
+            const buf = format === "flac"
+              ? encodeFlac(mixed.samples, Object.assign({ bitsPerSample: 16 }, options))
+              : encodeWav16(mixed.samples, options);
+            receipt.exported = format;
+            receipt.out = out;
+            receipt.bytes = buf.length;
+            receipt.kind = "export";
+            receipt.note = "this file is an export for other tools; kohane's own storage stays in its own containers";
+            if (args.dryRun) return Object.assign(receipt, { written: false });
+            fs.writeFileSync(out, buf);
+            return Object.assign(receipt, { written: true });
+          }
+          return receipt;
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
+      if (op === "kba") {
+        // The audio container: the tier is the volume knob (adpcm default, lossless optional, raw
+        // fallback). Writing one measures a WAV/AIFF source; reading one reports and decodes.
+        if (args.out) {
+          try {
+            const src = args.source ? String(args.source) : "";
+            if (!src) return { ok: false, op, note: "kba needs --source (a WAV/AIFF file) to write a container" };
+            const decoded = kohaneDecodeAudio(src);
+            const channels = Math.min(2, Math.max(1, decoded.channels || 1));
+            const frames = Math.floor(decoded.samples.length / Math.max(1, decoded.channels));
+            const pcm = new Int16Array(frames * channels);
+            for (let i = 0; i < pcm.length; i++) {
+              const v = decoded.samples[i] || 0;
+              pcm[i] = Math.round(Math.max(-1, Math.min(1, v)) * 32767);
+            }
+            const tier = String(args.tier || "adpcm").toLowerCase();
+            const buf = encodeKba(pcm, { sampleRate: decoded.sampleRate || 44100, channels, tier });
+            if (args.dryRun) return { ok: true, op, out: args.out, bytes: buf.length, written: false, note: "dryRun: the .kba container was not written" };
+            fs.writeFileSync(String(args.out), buf);
+            return {
+              ok: true, op, out: args.out, source: src, bytes: buf.length, written: true,
+              tier, sampleRate: decoded.sampleRate, channels, frames,
+              ratio: Math.round((buf.length / Math.max(1, frames * channels * 2)) * 1000) / 1000,
+              note: "written: the container stores the samples in the chosen tier, and the tier is the volume knob",
+            };
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kba needs a .kba path to read, or --out with --source to write one" };
+        try {
+          const raw = fs.readFileSync(String(args.path));
+          const stats = kbaStats(raw);
+          const decoded = decodeKba(raw);
+          return Object.assign({ ok: true, op, path: args.path }, stats, { decodedFrames: decoded.frames, decodedPeak: Math.max(...decoded.pcm.map((x) => Math.abs(x))), note: "read: the tier was declared in the header, never guessed" });
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
+      if (op === "kbb") {
+        // The instrument bank: a SoundFont converted into kohane's own containers. Third-party
+        // formats are inputs; the bank alone must enumerate instruments, key ranges and loops.
+        if (args.out) {
+          try {
+            const src = args.source ? String(args.source) : "";
+            if (!src) return { ok: false, op, note: "kbb needs --source (a .sf2 file) to convert" };
+            const result = convertSf2ToKbb(src, { name: args.title, targetRate: args.targetRate, tier: args.tier });
+            const bytes = Buffer.from(JSON.stringify(result.kbb), "utf8");
+            if (args.dryRun) {
+              return Object.assign({ ok: true, op, out: args.out, bytes: bytes.length, written: false, report: result.report, note: "dryRun: the .kbb bank was not written" });
+            }
+            fs.writeFileSync(String(args.out), bytes);
+            return {
+              ok: true, op, out: args.out, source: src, bytes: bytes.length, written: true, report: result.report,
+              note: `converted: ${result.report.presets} preset(s), ${result.report.zones} zone(s), ${result.report.uniqueSamples} unique sample payload(s) (${result.report.deduped} deduplicated) - nothing third-party survives the conversion`,
+            };
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kbb needs a .kbb path to read, or --out with --source to convert a SoundFont" };
+        try {
+          const doc = readKbb(fs.readFileSync(String(args.path)));
+          return Object.assign({ ok: true, op, path: args.path, name: doc.name, tier: doc.tier }, kbbSummary(doc));
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -6062,7 +6245,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kbw, kbs, peaks, pcm, play, score, sweep, info, synth` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth` };
     }
   },
   {
@@ -6177,6 +6360,11 @@ const TOOLS = [
             const view = readKbv(bytes);
             const okView = view.lanes >= 1 && view.palette.length > 0;
             checks.push({ kind: "kbv", name: f.name, verdict: okView ? "pass" : "fail", detail: `${view.lanes} lanes, ${view.palette.length} palette entries`, ok: okView });
+          } else if (f.kind === "kbb") {
+            const bank = readKbb(bytes);
+            const sum = kbbSummary(bank);
+            const okBank = sum.presets > 0 && sum.samples > 0;
+            checks.push({ kind: "kbb", name: f.name, verdict: okBank ? "pass" : "fail", detail: `${sum.presets} preset(s), ${sum.zones} zone(s), ${sum.samples} sample payload(s)`, ok: okBank });
           } else {
             fail("unknown media kind in the bundle");
           }
@@ -6198,7 +6386,8 @@ const TOOLS = [
         const bad = kpb.mediaChecks.checks.filter((c) => !c.ok);
         return { ok: false, op, mediaChecks: kpb.mediaChecks.checks, note: `install failed: the bundle's media self-proof fails (${bad.map((c) => `${c.kind} "${c.name}": ${c.detail}`).join("; ")})` };
       }
-      const ratio = kpb.fileBytes / Math.max(1, Number(bundle.sourceTotalBytes) || 1);
+      const contentBytes = Buffer.byteLength(JSON.stringify(kpb.payload), "utf8");
+      const ratio = contentBytes / Math.max(1, Number(bundle.sourceTotalBytes) || 1);
       const installs = loadKpbInstalls();
       if (installs.installs.some((i) => i.name === bundle.name)) {
         return { ok: false, op, note: `"${bundle.name}" is already installed (remove it first)` };
@@ -6247,20 +6436,25 @@ const TOOLS = [
       }
       const { bundle } = kpb.payload;
       const sourceTotal = Number(bundle.sourceTotalBytes) || 1;
-      const ratio = kpb.fileBytes / sourceTotal;
+      // The volume policy judges the CONTENT the bundle carries against its source - that is what
+      // "kohane 化后" measures. The sealed envelope's own expansion (base64 media, hex ciphertext)
+      // is reported as fileRatio, a fact about the packaging rather than a fact about the content.
+      const contentBytes = Buffer.byteLength(JSON.stringify(kpb.payload), "utf8");
+      const ratio = contentBytes / sourceTotal;
+      const fileRatio = kpb.fileBytes / sourceTotal;
       // the volume policy is a hard window, not a target: below 8% means content is missing,
       // above 20% means the slimming did not happen - both fail verification.
       const inWindow = ratio >= 0.08 && ratio <= 0.20;
       const mediaOk = !kpb.mediaChecks || kpb.mediaChecks.ok === true;
       const okVerdict = inWindow && mediaOk;
       let note;
-      if (okVerdict) note = "integrity held, the volume ratio sits inside 8%-20% and the carried media self-proves (score replays, envelope draws, view lays out)";
+      if (okVerdict) note = "integrity held, the content volume ratio sits inside 8%-20% and the carried media self-proves (score replays, envelope draws, view lays out)";
       else if (!mediaOk) note = `the bundle's media self-proof fails: ${kpb.mediaChecks.checks.filter((c) => !c.ok).map((c) => `${c.kind} "${c.name}": ${c.detail}`).join("; ")} - verification fails`;
-      else note = `the volume ratio ${(ratio * 100).toFixed(1)}% is outside the 8%-20% window - verification fails`;
+      else note = `the content volume ratio ${(ratio * 100).toFixed(1)}% is outside the 8%-20% window - verification fails`;
       return {
         ok: okVerdict, op, name: bundle.name, version: bundle.version,
-        fileBytes: kpb.fileBytes, sourceTotalBytes: bundle.sourceTotalBytes,
-        ratio: Math.round(ratio * 1000) / 1000, window: [0.08, 0.20],
+        fileBytes: kpb.fileBytes, contentBytes, sourceTotalBytes: bundle.sourceTotalBytes,
+        ratio: Math.round(ratio * 1000) / 1000, fileRatio: Math.round(fileRatio * 1000) / 1000, window: [0.08, 0.20],
         capabilities: bundle.capabilities,
         mediaChecks: kpb.mediaChecks ? kpb.mediaChecks.checks : [],
         note,

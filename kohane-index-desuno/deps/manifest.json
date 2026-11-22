@@ -142,14 +142,15 @@
       "name": "kohane soundfont reader",
       "origin": "built here (kohane-index-desuno)",
       "licence": "MIT (this project)",
-      "purpose": "read SoundFont 2 (.sf2) tables: preset names and numbers (phdr), instrument names (inst), sample names with rate and pitch (shdr), and the smpl data size - a whole font indexed without decoding a sample",
+      "purpose": "read SoundFont 2 (.sf2) tables: preset names and numbers (phdr), instrument names (inst), sample names with rate and pitch (shdr), the preset and instrument bag/generator chains (pbag/ibag/pgen/igen - key ranges, velocity ranges, loop offsets, sample ids), the smpl data size and its offset - a whole font indexed without decoding a sample",
       "usedBy": [
-        "deps/media-registry.mjs (read capability)"
+        "deps/media-registry.mjs (read capability)",
+        "deps/decoders/kbb.mjs (the SoundFont-to-bank conversion)"
       ],
       "file": "deps/decoders/sf2.mjs",
-      "sha256": "20e4069e28d2f42eb01299f3063368d6acff8b65013e73eb398b3e2c8dbae078",
-      "bytes": 4836,
-      "note": "verified by a synthesised sfbk whose table values were chosen in advance, plus the real font D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2 (1 preset, 1 instrument, 146 samples, 44100 Hz) where present. The real font exposed the reader's first bug: the tables live after the sample data at the tail of the file, so a small probe window always missed them - the default now walks to the end"
+      "sha256": "e7c780ef70c8620ac70d2945d2e5fad23f523a14accb2dd1edf88ca0c9c18922",
+      "bytes": 5925,
+      "note": "verified by a synthesised sfbk whose table values were chosen in advance, plus the real font D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2 (1 preset, 1 instrument, 146 samples, 44100 Hz) where present. The real font exposed the reader's first bug: the tables live after the sample data at the tail of the file, so a small probe window always missed them - the default now walks to the end | hash updated deliberately on 2026-11-22: the bag/generator chains joined the reader (preset and instrument zones with key/velocity ranges, loop offsets and sample ids) and the smpl chunk offset is recorded, so the bank conversion can extract sample PCM and enumerate key ranges and loops"
     },
     {
       "id": "fxp",
@@ -173,15 +174,64 @@
       "name": "kohane score, wave and view containers",
       "origin": "built here (kohane-index-desuno)",
       "licence": "MIT (this project)",
-      "purpose": "read and write kohane's own media containers - the .kbs score (title/tempo/key/parts/notes in the synth's second space), the .kbw wave envelope (min/max buckets over a declared frame count) and the .kbv view layout (lanes, octave lines, palette) - the '作编混' side of the .kb family, where third-party formats stay inputs",
+      "purpose": "read and write kohane's own media containers - the .kbs score (title/tempo/key/parts/notes in the synth's second space), the .kbw wave envelope (min/max buckets over a declared frame count), the .kbv view layout (lanes, octave lines, palette) and the .kbm mix (tracks with gain/pan/route, buses, master, effect chains) - the '作编混' side of the .kb family, where third-party formats stay inputs",
       "usedBy": [
-        "deps/media-registry.mjs (three container capabilities)",
-        "lib/core.mjs (library_audio op=kbs and op=kbw, and the kpb-install/kpb-verify media self-proof)"
+        "deps/media-registry.mjs (four container capabilities)",
+        "lib/core.mjs (library_audio op=kbs, op=kbw, op=kbm and op=mix, and the kpb-install/kpb-verify media self-proof)"
       ],
       "file": "deps/decoders/kb-media.mjs",
-      "sha256": "f955bb1da0d83e5b8b39589f9d088be759e134f9c76a9309351fef96f3f8a0c6",
-      "bytes": 9923,
-      "note": "verified by the selfcheck kpb media (stage 3) section: each container round-trips field for field, the score replays through the synth with the same frame count as a direct render, malformed scores are refused with the container's own name, the bundle self-proof passes all three checks on verify, a bundle whose score was emptied fails verification, and install refuses the same bundle"
+      "sha256": "7b761e88ca377b3dddb91c75f4b4a3f3396f6e68b122703da3a3ab5cf30de1dd",
+      "bytes": 14377,
+      "note": "verified by the selfcheck kpb media (stage 3) section: each container round-trips field for field, the score replays through the synth with the same frame count as a direct render, malformed scores are refused with the container's own name, the bundle self-proof passes all three checks on verify, a bundle whose score was emptied fails verification, and install refuses the same bundle | hash updated deliberately on 2026-11-22: the .kbm mix container joined the family (tracks with gain/pan/route, buses, master, effect chains), with read-time validation that every route names a declared bus"
+    },
+    {
+      "id": "mixer",
+      "kind": "decoder",
+      "name": "kohane mixer",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "render stems through a .kbm mix: per-stem gain and equal-power pan, bus routing with per-bus gain, master gain, and a strict rule that a declared but unexecutable effect refuses the render instead of being silently ignored",
+      "usedBy": [
+        "deps/media-registry.mjs (mix capability)",
+        "lib/core.mjs (library_audio op=mix, the stems worker task)"
+      ],
+      "file": "deps/decoders/mix.mjs",
+      "sha256": "6c2a707150a7e46c25a9d4ca6fe6411e7f0afb657ddd594376845e2ebc7f5a93",
+      "bytes": 4581,
+      "note": "verified by the selfcheck kpb mix (stage 4) section: bus routing sums exactly (0.2 + 0.4x0.5 = 0.4), master gain closes the chain, the pan extremes isolate channels, a sine stem exported through op=mix equals the analytic sine x gain x the centre coefficient sample for sample, hard-panned stems isolate by channel, an unexecutable effect refuses the render, and the pooled render equals the one-core render"
+    },
+    {
+      "id": "kba",
+      "kind": "decoder",
+      "name": "kohane audio container",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "store PCM in kohane's own container with a three-tier ladder: adpcm (IMA 4-bit, the default and the volume knob), lossless (delta through the built-in deflate) and raw (untouched int16); the header declares the tier so a reader never guesses",
+      "usedBy": [
+        "deps/media-registry.mjs (read/decode/encode capability)",
+        "deps/decoders/kbb.mjs (sample payloads inside the bank)",
+        "lib/core.mjs (library_audio op=kba)"
+      ],
+      "file": "deps/decoders/kba.mjs",
+      "sha256": "33742fb4d5883912654c91dfb681cb580dc4962fa22557f47b31d524b2e3c9a3",
+      "bytes": 7749,
+      "note": "verified by the selfcheck kpb assets (stage 5) section: the adpcm round-trip keeps the peak error inside 8% of full scale on a realistic spectrum and spans block boundaries, the lossless and raw tiers round-trip sample for sample, and the tier ladder shrinks for real (adpcm < lossless < raw) | hash updated deliberately on 2026-11-22: the encoder/decoder pair was rewritten to the standard IMA bit-by-bit form (the earlier quantisation split the code-7 branch between the two sides), and the raw-tier reader copies through the Buffer API so a pooled Buffer at an odd offset cannot break a typed-array view"
+    },
+    {
+      "id": "kbb",
+      "kind": "decoder",
+      "name": "kohane instrument bank",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "convert a SoundFont into kohane's own bank: every preset's zones enumerated with key and velocity ranges, root key and loop points, sample PCM deduplicated by content hash and stored as .kba (ADPCM by default, honest 2:1 low-pass decimation when the source rate allows) - the bank alone must enumerate instruments, key ranges and loops",
+      "usedBy": [
+        "deps/media-registry.mjs (read/encode capability)",
+        "lib/core.mjs (library_audio op=kbb, and the kpb media self-proof for kbb)"
+      ],
+      "file": "deps/decoders/kbb.mjs",
+      "sha256": "7dee4949677a95fe2c7c1f01df95f65c9dc997ad4173705a92d327ec2c504bfa",
+      "bytes": 9445,
+      "note": "verified by the selfcheck kpb assets (stage 5) section: a zone-chain fixture converts to two zones with one deduplicated sample and enumerated key ranges and loops, the real Romantic Tp.sf2 converts inside the 8%-20% content-volume window, and a bundle carrying the bank self-proves it on verify | hash updated deliberately on 2026-11-22: the real font writes genCount 0 in its bags and leaves the count as the gap to the next bag's genIndex - the walker now takes the count when present and the gap otherwise, skips bags with no generators, and sample PCM is copied through the Buffer API so a pooled Buffer at an odd offset cannot break a typed-array view"
     },
     {
       "id": "external-ffmpeg",
