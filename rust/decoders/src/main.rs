@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, registry};
+use kohane_decoder::{adpcm, flac, kba, registry};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -151,6 +151,7 @@ fn main() -> ExitCode {
             }
         }
         Some("kb") => cmd_kb(&args),
+        Some("kba") => cmd_kba(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -169,6 +170,9 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder kb read  <kbs|kbw|kbv|kbm> <file>");
             eprintln!("       kohane-decoder capabilities");
             eprintln!("       kohane-decoder registry");
+            eprintln!("       kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
+            eprintln!("       kohane-decoder kba decode <file.kba>");
+            eprintln!("       kohane-decoder kba stats <file.kba>");
             ExitCode::from(2)
         }
     }
@@ -257,6 +261,120 @@ fn cmd_kb(args: &[String]) -> ExitCode {
         _ => {
             eprintln!("usage: kohane-decoder kb write <kbs|kbw|kbv|kbm> <out.file> [params.json|-]");
             eprintln!("       kohane-decoder kb read  <kbs|kbw|kbv|kbm> <file>");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn cmd_kba(args: &[String]) -> ExitCode {
+    let Some(verb) = args.get(2).map(String::as_str) else {
+        eprintln!("usage: kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
+        eprintln!("       kohane-decoder kba decode <file.kba>");
+        eprintln!("       kohane-decoder kba stats <file.kba>");
+        return ExitCode::from(2);
+    };
+    let tier_of = |s: &str| -> Option<u8> {
+        match s {
+            "0" | "raw" => Some(0),
+            "1" | "lossless" => Some(1),
+            "2" | "adpcm" => Some(2),
+            _ => None,
+        }
+    };
+    match verb {
+        "encode" => {
+            let (Some(input), Some(output), Some(tier_arg)) = (args.get(3), args.get(4), args.get(5)) else {
+                eprintln!("usage: kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
+                return ExitCode::from(2);
+            };
+            let Some(tier) = tier_of(tier_arg) else {
+                eprintln!("tier must be one of 0|raw, 1|lossless, 2|adpcm");
+                return ExitCode::from(2);
+            };
+            let raw = match fs::read(input) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {input}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            if raw.len() % 2 != 0 {
+                eprintln!("the raw input has an odd byte count (not 16-bit PCM)");
+                return ExitCode::from(1);
+            }
+            let pcm: Vec<i16> = raw
+                .chunks_exact(2)
+                .map(|c| i16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            let rate: u32 = args.get(6).and_then(|s| s.parse().ok()).unwrap_or(44100);
+            let channels: u16 = args.get(7).and_then(|s| s.parse().ok()).unwrap_or(1);
+            match kba::encode_kba(&pcm, tier, rate, channels) {
+                Ok(bytes) => match fs::write(output, &bytes) {
+                    Ok(()) => {
+                        println!("encoded {} frames into {output} ({} bytes)", pcm.len(), bytes.len());
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("cannot write {output}: {e}");
+                        ExitCode::from(1)
+                    }
+                },
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "decode" => {
+            let Some(target) = args.get(3) else {
+                eprintln!("usage: kohane-decoder kba decode <file.kba>");
+                return ExitCode::from(2);
+            };
+            let buf = match fs::read(target) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {target}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            match kba::decode_kba(&buf) {
+                Ok(r) => {
+                    println!("{}", r.to_json().render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "stats" => {
+            let Some(target) = args.get(3) else {
+                eprintln!("usage: kohane-decoder kba stats <file.kba>");
+                return ExitCode::from(2);
+            };
+            let buf = match fs::read(target) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {target}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            match kba::kba_stats(&buf) {
+                Ok(s) => {
+                    println!("{}", s.to_json().render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        _ => {
+            eprintln!("usage: kohane-decoder kba encode <in.raw> <out.kba> <0|1|2|raw|lossless|adpcm> [sampleRate] [channels]");
+            eprintln!("       kohane-decoder kba decode <file.kba>");
+            eprintln!("       kohane-decoder kba stats <file.kba>");
             ExitCode::from(2)
         }
     }

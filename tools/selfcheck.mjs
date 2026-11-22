@@ -1995,6 +1995,90 @@ section("rust cross-check");
       rustKba.length === jsKba.length && rustKba.equals(jsKba),
       JSON.stringify({ js: jsKba.length, rust: rustKba.length }));
 
+    // The full KBA container, tier by tier. raw and adpcm writers are byte-exact with the JS
+    // encoder. The lossless tier is different by design: rust writes a stored-block zlib stream
+    // (legal deflate, no compression strategy), so byte equality with a zlib library's output is
+    // not the contract - the contract is round-trip: what rust wrote decodes to the original PCM
+    // on the JS side, and what JS wrote decodes to the same PCM on both sides. The decode
+    // direction stays byte-exact at the sample level via digests of the recovered PCM.
+    const kbaMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kba.mjs")).href);
+    const { decodeKba, kbaStats } = kbaMod;
+    const pcmMd5 = (p) => createHash("md5").update(Buffer.from(p.buffer, p.byteOffset, p.byteLength)).digest("hex");
+    const kbaExactTiers = [
+      { tier: "raw", arg: "0" },
+      { tier: "adpcm", arg: "2" },
+    ];
+    for (const t of kbaExactTiers) {
+      const jsBytes = encodeKba(pcm, { sampleRate: 44100, channels: 1, tier: t.tier });
+      const out = path.join(TMP, `rust-x-${t.tier}.kba`);
+      const run = spawnSync(rustBin, ["kba", "encode", rawFile, out, t.arg, "44100", "1"], { encoding: "utf8", windowsHide: true });
+      const rustBytes = fs.existsSync(out) ? fs.readFileSync(out) : Buffer.alloc(0);
+      ok(`the rust ${t.tier} kba writer is byte-exact with the JS original`,
+        !run.error && run.status === 0 && rustBytes.length === jsBytes.length && rustBytes.equals(jsBytes),
+        JSON.stringify({ js: jsBytes.length, rust: rustBytes.length, status: run.status }));
+      const jsPcm = decodeKba(fs.readFileSync(out)).pcm;
+      const jsDigest = pcmMd5(jsPcm);
+      const dRun = spawnSync(rustBin, ["kba", "decode", out], { encoding: "utf8", windowsHide: true });
+      let d = null;
+      try { d = dRun.status === 0 ? JSON.parse(dRun.stdout) : null; } catch { d = null; }
+      ok(`the rust ${t.tier} decoder recovers the same PCM the JS decoder does`,
+        d && d.pcmMd5 === jsDigest && d.pcmFrames === pcm.length && d.frames === pcm.length,
+        JSON.stringify({ js: jsDigest, rust: d && d.pcmMd5, status: dRun.status }));
+    }
+    {
+      const jsLossless = encodeKba(pcm, { sampleRate: 44100, channels: 1, tier: "lossless" });
+      const jsLossPcm = decodeKba(jsLossless).pcm;
+      const jsLossDigest = pcmMd5(jsLossPcm);
+      const file = path.join(TMP, "rust-x-lossless-js.kba");
+      fs.writeFileSync(file, jsLossless);
+      const dRun = spawnSync(rustBin, ["kba", "decode", file], { encoding: "utf8", windowsHide: true });
+      let d = null;
+      try { d = dRun.status === 0 ? JSON.parse(dRun.stdout) : null; } catch { d = null; }
+      ok("the rust decoder restores a JS-written lossless stream to the same PCM",
+        d && d.pcmMd5 === jsLossDigest && d.pcmFrames === pcm.length,
+        JSON.stringify({ js: jsLossDigest, rust: d && d.pcmMd5, status: dRun.status }));
+    }
+    {
+      const out = path.join(TMP, "rust-x-lossless.kba");
+      const run = spawnSync(rustBin, ["kba", "encode", rawFile, out, "1", "44100", "1"], { encoding: "utf8", windowsHide: true });
+      const jsBack = run.status === 0 ? decodeKba(fs.readFileSync(out)).pcm : null;
+      let same = jsBack && jsBack.length === pcm.length;
+      if (same) for (let i = 0; i < pcm.length; i++) if (jsBack[i] !== pcm[i]) { same = false; break; }
+      ok("a rust-written lossless stream decodes back to the original PCM on the JS side (round-trip contract)",
+        same,
+        JSON.stringify({ status: run.status, frames: jsBack && jsBack.length }));
+    }
+    {
+      const file = path.join(TMP, "rust-x-adpcm.kba");
+      const jsStats = kbaStats(fs.readFileSync(file));
+      const run = spawnSync(rustBin, ["kba", "stats", file], { encoding: "utf8", windowsHide: true });
+      let r = null;
+      try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+      ok("the rust kba stats agree with the JS stats field for field",
+        r && r.tier === jsStats.tier && r.sampleRate === jsStats.sampleRate && r.channels === jsStats.channels &&
+          r.frames === jsStats.frames && r.bytes === jsStats.bytes && r.pcmBytes === jsStats.pcmBytes,
+        JSON.stringify({ js: jsStats, rust: r, status: run.status }));
+    }
+    {
+      const refuseCases = [
+        { name: "no marker", make: () => Buffer.from("nope") },
+        { name: "unknown version", make: () => { const b = Buffer.from(jsKba); b[4] = 9; return b; } },
+        { name: "unknown tier", make: () => { const b = Buffer.from(jsKba); b[5] = 7; return b; } },
+      ];
+      for (const c of refuseCases) {
+        const bytes = c.make();
+        let jsMessage = null;
+        try { decodeKba(bytes); } catch (e) { jsMessage = String(e.message); }
+        const file = path.join(TMP, `rust-x-refuse-${c.name.replaceAll(" ", "-")}.kba`);
+        fs.writeFileSync(file, bytes);
+        const run = spawnSync(rustBin, ["kba", "decode", file], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust kba reader refuses ${c.name} with the JS sentence`,
+          run.status === 1 && jsMessage !== null && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    }
+
     // The FLAC half: the JS encoder's PCM stage (round(clamp(x)*32767)) produces the raw bytes the
     // rust side reads, so both encode the same PCM and the streams must be byte-identical.
     const { encodeFlac } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "flac-encoder.mjs")).href);
