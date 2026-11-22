@@ -1920,6 +1920,55 @@ section("opna borrowed renderer");
   }
 }
 
+// ---------------------------------------------------------------- lm4 drumkit
+section("lm4 drumkit");
+{
+  const audioTool = tool("library_audio");
+  const lm4 = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "lm4.mjs")).href);
+
+  const kitText = [
+    "vst samples,",
+    "Fixture Kit,",
+    "Fixture Drums,",
+    "KOHANE,",
+    "",
+    "1,  0,  0,  36,Kick,36BD10301.wav,  1,  65,  0,  0,  1,  1,  0,  0,",
+    "1,  0,  0,  36,Kick,36BD10302.wav,  66,  127,  0,  0,  1,  1,  0,  0,",
+    "2,  0,  0,  38,SD,38SD10401.wav,  1,  65,  0,  0,  1,  1,  2,  6,",
+    "6,  0,  0,  42,HH,42HHC0301.wav,  1,  65,  0,  0,  1,  1,  1,  1,",
+    "-1",
+    "",
+    "LM4 Drumkit Editor",
+  ].join("\n");
+  const kit = lm4.parseLm4Kit(kitText);
+  ok("an LM4 drumkit list parses pad for pad with MIDI notes, velocity layers and groups",
+    kit.format === "lm4-drumkit" && kit.name === "Fixture Kit," && kit.folder === "Fixture Drums," && kit.vendor === "KOHANE," &&
+    kit.padCount === 4 && kit.samples === 4 && kit.midiMap[36] === "Kick" && kit.midiMap[38] === "SD" &&
+    kit.pads[0].velLo === 1 && kit.pads[0].velHi === 65 && kit.pads[1].velHi === 127 && kit.pads[2].group === 2 && kit.pads[2].mode === 6 && kit.pads[3].mode === 1,
+    JSON.stringify({ name: kit.name, pads: kit.padCount, midiMap: kit.midiMap }));
+
+  let foreign = null;
+  try { lm4.parseLm4Kit("hello, not a kit\nnext line\n"); } catch (e) { foreign = String(e.message); }
+  ok("foreign text is refused with the kit's own header words",
+    foreign !== null && /vst samples/.test(foreign), foreign);
+
+  // The real content, where present: the wav-flavoured Rock Kit and the whole-directory scan.
+  const realKit = "D:/LM4Mark2/LM4-MarkII Content/Wizoo Acoustic/Wizoo Rock Kit.wav.txt";
+  const realContent = "D:/LM4Mark2/LM4-MarkII Content";
+  if (fs.existsSync(realKit)) {
+    const real = lm4.readLm4Kit(realKit);
+    ok("the real converted kit reads with its full pad set and sample references",
+      real.name === "Rock Kit," && real.padCount > 30 && real.midiNotes.includes(36) && real.midiNotes.includes(38) && real.midiNotes.includes(42),
+      JSON.stringify({ name: real.name, pads: real.padCount, notes: real.midiNotes.length }));
+    const scan = await audioTool.execute({ op: "lmkit", dir: realContent });
+    ok("op=lm4 scans the real content into kits and sample totals",
+      scan.ok === true && scan.kitCount >= 90 && scan.sampleFiles >= 5000,
+      JSON.stringify({ ok: scan.ok, kits: scan.kitCount, samples: scan.sampleFiles }));
+  } else {
+    ok("the real LM4 content (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

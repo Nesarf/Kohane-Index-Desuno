@@ -40,6 +40,7 @@ import { convertSf2ToKbb, readKbb, kbbSummary } from "../deps/decoders/kbb.mjs";
 import { writeKbi, readKbi, convertPresetToKbi, convertPresetBatch } from "../deps/decoders/kbi.mjs";
 import { parseFpch } from "../deps/decoders/fxp.mjs";
 import { readZtdwConfig, readZtdwSample } from "../deps/decoders/ztdw.mjs";
+import { readLm4Kit, scanLm4Content } from "../deps/decoders/lm4.mjs";
 import { decodeExternally, resolveExternalDecoder, renderOpna } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
@@ -4776,9 +4777,9 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb | kbi | ztdw" },
-      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read; score: a .mid file, or a .m/.m2/.pmd/.m26/.s98 PC-98 music file rendered through the borrowed OPNA emulation" },
-      dir: { type: "string", description: "sweep: a directory to walk for audio files" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb | kbi | ztdw | lmkit" },
+      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read; score: a .mid file, or a .m/.m2/.pmd/.m26/.s98 PC-98 music file rendered through the borrowed OPNA emulation; lm4: one LM4 drumkit list" },
+      dir: { type: "string", description: "sweep: a directory to walk for audio files; lm4: a LM4 content directory to scan into kits and sample totals" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
       threads: { type: "number", description: "sweep/mix: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
       compare: { type: "boolean", description: "sweep: also run the same work on one core and report the speed-up" },
@@ -6268,6 +6269,25 @@ const TOOLS = [
         }
       }
 
+      if (op === "lmkit") {
+        // The LM4 Mark II drum machine, indexed: a kit list is fully enumerable from its text -
+        // every pad, MIDI note, sample and velocity layer - and a content directory scans into
+        // kits and sample totals. Facts only; nothing is written.
+        if (args.dir) {
+          try {
+            return Object.assign({ ok: true, op, dir: String(args.dir) }, scanLm4Content(String(args.dir)));
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "lmkit needs a drumkit list path, or --dir to scan a content directory" };
+        try {
+          return Object.assign({ ok: true, op }, readLm4Kit(String(args.path)));
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -6368,7 +6388,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbi, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth, ztdw` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbi, kbm, kbw, kbs, lmkit, mix, peaks, pcm, play, score, sweep, info, synth, ztdw` };
     }
   },
   {

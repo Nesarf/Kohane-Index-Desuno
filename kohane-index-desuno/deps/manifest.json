@@ -282,6 +282,22 @@
       "note": "not shipped with KID: it is borrowed where it exists, looked up from KOHANE_OPNA first, then from this recorded path; when neither resolves, the engine says so instead of failing silently. The renderer was built at -O0 because the upstream core carries undefined behaviour that -O2 turns into silence, and with a narrow fopen because the wide open rendered silence on this MinGW CRT; sample output still varies between runs on this CRT (recorded in research/notes/2026-11-22-opna-98fmplayer-integration.md), so KID's checks assert the deterministic facts - exit codes, refusals and the WAV structure - while musical verification awaits real .m files"
     },
     {
+      "id": "lm4",
+      "kind": "decoder",
+      "name": "kohane LM4 drumkit list reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read LM4 Mark II drumkit lists: the four-line header (kit name, sample folder, vendor) and every pad with its MIDI note, sample file, velocity layers, mute group and play mode - a kit is fully enumerable from its text alone, so the content indexes without touching the samples",
+      "usedBy": [
+        "deps/media-registry.mjs (read capability)",
+        "lib/core.mjs (library_audio op=lm4)"
+      ],
+      "file": "deps/decoders/lm4.mjs",
+      "sha256": "99398e515484df2de1cdd61bc6b69f44289780306b61cfb8417d77f6f8bc2953",
+      "bytes": 3754,
+      "note": "verified by the selfcheck lm4 section: a synthesised kit parses pad for pad (MIDI notes, velocity layers, mute groups, play modes), foreign text is refused with the kit's own header words, and the real converted kit on D:/LM4Mark2 reads with its full pad set while the content directory scans into kits and sample totals where present | hash updated deliberately on 2026-11-22: the mute-group and play-mode fields moved one position (they are the last two fields, positions 13 and 14 - the first guess read the two before them)"
+    },
+    {
       "id": "external-ffmpeg",
       "kind": "binary",
       "name": "ffmpeg (external decoder, borrowed)",

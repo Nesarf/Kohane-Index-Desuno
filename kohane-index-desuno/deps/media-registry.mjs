@@ -18,10 +18,12 @@ import { capabilities as mix } from "./decoders/mix.mjs";
 import { capabilities as kba } from "./decoders/kba.mjs";
 import { capabilities as kbb } from "./decoders/kbb.mjs";
 import { capabilities as kbi } from "./decoders/kbi.mjs";
+import { capabilities as ztdw } from "./decoders/ztdw.mjs";
+import { capabilities as lm4 } from "./decoders/lm4.mjs";
 
 /** Every decoder KID owns. A decoder not listed here is not part of the surface, whatever it does.
  *  One module may declare a whole family (kb-media speaks for the .kbs/.kbw/.kbv/.kbm containers). */
-export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter, synth, sf2, fxp, kbMedia, mix, kba, kbb, kbi];
+export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter, synth, sf2, fxp, kbMedia, mix, kba, kbb, kbi, ztdw, lm4];
 
 const LEVEL_ORDER = { none: 0, metadata: 1, partial: 2, full: 3 };
 
