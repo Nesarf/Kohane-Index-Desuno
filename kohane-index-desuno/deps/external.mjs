@@ -34,6 +34,71 @@ export function resolveExternalDecoder(id = "external-ffmpeg") {
 }
 
 /**
+ * Resolves the OPNA renderer borrowed from 98fmplayer: an explicit environment override first,
+ * then the recorded entry. Nothing is guessed and nothing is searched for across the disk.
+ */
+export function resolveOpnaRenderer() {
+  const override = process.env.KOHANE_OPNA;
+  if (override) return { path: override, source: "KOHANE_OPNA" };
+  const entry = externalDecoders().find((e) => e.id === "external-opna");
+  if (entry && entry.path && fs.existsSync(entry.path)) return { path: entry.path, source: "deps/manifest.json" };
+  return null;
+}
+
+/**
+ * Renders a PC-98 music file (.m/.m2/PMD) or an .s98 stream into a WAV staged at `options.out`.
+ * The destination is the caller's staging decision; the receipt carries the borrowed facts and
+ * the WAV structure the renderer wrote, read back rather than assumed.
+ */
+export function renderOpna(file, options = {}) {
+  const renderer = resolveOpnaRenderer();
+  if (!renderer) {
+    throw new Error(
+      "no opna renderer is installed or recorded (set KOHANE_OPNA to one, or record it in deps/manifest.json)",
+    );
+  }
+  const out = String(options.out || "");
+  if (!out) throw new Error("renderOpna needs a staging destination (options.out)");
+  const seconds = Number(options.seconds) || 30;
+  const result = spawnSync(renderer.path, [file, out, String(seconds)], {
+    maxBuffer: 16 * 1024 * 1024, windowsHide: true, encoding: "utf8",
+  });
+  if (result.error) throw new Error(`the opna renderer could not be started: ${result.error.message}`);
+  if (result.status !== 0) {
+    const detail = String(result.stderr || "").trim().split("\n").slice(-2).join(" ");
+    throw new Error(`the opna renderer refused this file (exit ${result.status})${detail ? ": " + detail : ""}`);
+  }
+  const wav = fs.readFileSync(out);
+  if (wav.length < 44 || wav.toString("latin1", 0, 4) !== "RIFF" || wav.toString("latin1", 8, 12) !== "WAVE") {
+    throw new Error("the opna renderer did not write a WAV at the staging path");
+  }
+  let sampleRate = 0;
+  let channels = 0;
+  let dataAt = -1;
+  let dataBytes = 0;
+  let at = 12;
+  while (at + 8 <= wav.length) {
+    const id = wav.toString("latin1", at, at + 4);
+    const size = wav.readUInt32LE(at + 4);
+    if (id === "fmt ") {
+      channels = wav.readUInt16LE(at + 8 + 2);
+      sampleRate = wav.readUInt32LE(at + 8 + 4);
+    } else if (id === "data") {
+      dataAt = at + 8;
+      dataBytes = Math.min(size, wav.length - dataAt);
+      break;
+    }
+    at += 8 + size + (size % 2);
+  }
+  const frames = Math.floor(dataBytes / 2 / Math.max(1, channels));
+  return {
+    format: "opna-rendered", source: file, staged: out,
+    renderer: renderer.path, rendererSource: renderer.source,
+    sampleRate, channels, frames, bytes: wav.length,
+    note: "the PC-98 music was rendered through the borrowed OPNA (YM2608) emulation; the samples are in the staged WAV",
+  };
+}
+/**
  * Decodes anything the external decoder understands into interleaved 16-bit PCM.
  * Returns the samples as floats in -1..1, the same shape the engine's own decoders produce.
  */

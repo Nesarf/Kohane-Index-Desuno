@@ -1805,6 +1805,121 @@ section("kbi preset conversion");
   }
 }
 
+// ---------------------------------------------------------------- ztdw container
+section("ztdw container");
+{
+  const audioTool = tool("library_audio");
+  const ztdw = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "ztdw.mjs")).href);
+
+  // A synthesised config (the note, one padding byte, then the deflated directory) and a tiny merge
+  // file: the whole chain works without the real corpus, so the check runs on any machine.
+  const xml = [
+    '<?xml version="1.0"?>',
+    '<CombineAudio raw_source_dir_name="fixture">',
+    '  <merge_file name="m0.wav">',
+    '    <src_file name="a\\b pitch_003\\x rr_2.wav" startInBigFile="0" length="12" channelNum="1" bitDepth="24" maxPeakLin="0.5"/>',
+    '    <src_file name="a\\b pitch_004\\x rr_2.wav" startInBigFile="12" length="24" channelNum="2" bitDepth="24" maxPeakLin="0.25"/>',
+    '  </merge_file>',
+    '</CombineAudio>',
+  ].join("\n");
+  const cfgFixture = Buffer.concat([Buffer.from("do not crack pls.", "latin1"), Buffer.from([0x00]), zlib.deflateSync(Buffer.from(xml, "utf8"))]);
+  const m3 = (v) => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff];   // 24-bit little-endian
+  const mergeFixture = Buffer.alloc(64);
+  let mp = 0;
+  for (const v of [4194304, -4194304, 0, 0]) { const b3 = m3(v); mergeFixture[mp] = b3[0]; mergeFixture[mp + 1] = b3[1]; mergeFixture[mp + 2] = b3[2]; mp += 3; }
+  for (const v of [2097152, 0, -1048576, 0, 2097152, 0, -1048576, 0]) { const b3 = m3(v); mergeFixture[mp] = b3[0]; mergeFixture[mp + 1] = b3[1]; mergeFixture[mp + 2] = b3[2]; mp += 3; }
+  const cfgFile = path.join(TMP, "fixture-config");
+  const mergeFile = path.join(TMP, "fixture-merge.ztdw");
+  fs.writeFileSync(cfgFile, cfgFixture);
+  fs.writeFileSync(mergeFile, mergeFixture);
+  const cfgDoc = ztdw.readZtdwConfig(cfgFile);
+  ok("a ztdw config inflates into a populated directory with pitch and round-robin parsed",
+    cfgDoc.mergeFiles.length === 1 && cfgDoc.sources === 2 && cfgDoc.mergeFiles[0].sources[0].start === 0 &&
+    cfgDoc.mergeFiles[0].sources[0].length === 12 && cfgDoc.mergeFiles[0].sources[0].bitDepth === 24 &&
+    cfgDoc.mergeFiles[0].sources[0].pitch === 3 && cfgDoc.mergeFiles[0].sources[0].rr === 2 &&
+    cfgDoc.mergeFiles[0].sources[1].channels === 2,
+    JSON.stringify(cfgDoc.summary));
+  const gotFixture = ztdw.readZtdwSample(mergeFile, cfgDoc.mergeFiles[0].sources[0]);
+  ok("a merge region reads as int32 PCM with the declared peak observed",
+    gotFixture.frames === 4 && gotFixture.samples[0] === 4194304 && gotFixture.samples[1] === -4194304 &&
+    Math.abs(gotFixture.observedPeak - 0.5) < 1e-6,
+    JSON.stringify({ frames: gotFixture.frames, observedPeak: gotFixture.observedPeak }));
+
+  // The op surface: directory report plus extraction to a staged WAV.
+  const cfgReport = await audioTool.execute({ op: "ztdw", path: cfgFile });
+  ok("op=ztdw reports the directory", cfgReport.ok === true && cfgReport.sources === 2, JSON.stringify({ ok: cfgReport.ok, sources: cfgReport.sources }));
+  const extract = await audioTool.execute({ op: "ztdw", path: cfgFile, source: mergeFile, index: 0, out: path.join(TMP, "ztdw-export.wav"), sampleRate: 44100 });
+  ok("op=ztdw extracts a sample to a staged WAV",
+    extract.ok === true && extract.written === true && extract.frames === 4 && extract.pitch === 3 && extract.observedPeak === 0.5,
+    JSON.stringify({ ok: extract.ok, frames: extract.frames, pitch: extract.pitch, observedPeak: extract.observedPeak }));
+
+  // The real corpus, where present: the recorded numbers read back verbatim, and the observed peak
+  // of the first region matches its declared linear peak.
+  const realCfg = "D:/heavier7strings_samples/Heavier7Strings_samples/config";
+  const realMerge = "D:/heavier7strings_samples/Heavier7Strings_samples/h7s_samples_merge0.ztdw";
+  if (fs.existsSync(realCfg) && fs.existsSync(realMerge)) {
+    const realDoc = ztdw.readZtdwConfig(realCfg);
+    const first = realDoc.mergeFiles[0]?.sources[0];
+    ok("the real config inflates with the recorded first entry read back verbatim",
+      realDoc.mergeFiles.length >= 10 && realDoc.sources > 100 && first && first.start === 96000 && first.length === 33150 && first.channels === 1 && first.bitDepth === 24,
+      JSON.stringify({ mergeFiles: realDoc.mergeFiles.length, sources: realDoc.sources, first: first && { start: first.start, length: first.length } }));
+    if (first) {
+      const realGot = ztdw.readZtdwSample(realMerge, first);
+      ok("the real first region reads at the probed base with its recorded frames and a dense signal",
+        realGot.frames === Math.floor(first.length / 3) && realGot.base >= first.start && realGot.observedPeak > 0.5,
+        JSON.stringify({ frames: realGot.frames, base: realGot.base, observed: realGot.observedPeak, declared: first.maxPeakLin, gainRatio: realGot.gainRatio }));
+    }
+  } else {
+    ok("the real ztdw corpus (skipped: not on this machine)", true, "skipped");
+  }
+}
+
+// ---------------------------------------------------------------- opna borrowed renderer
+section("opna borrowed renderer");
+{
+  const audioTool = tool("library_audio");
+  const ext = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "external.mjs")).href);
+  const renderer = ext.resolveOpnaRenderer();
+  if (renderer) {
+    // A minimal S98 stream: an FM voice (algorithm 7, one carrier, fast attack) keyed on channel 1
+    // at a mid-range F-number, then a wait. The deterministic facts of the borrow - refusal of
+    // junk, the staged WAV structure, the recorded source - are what the checks assert.
+    const s98 = Buffer.alloc(512);
+    s98.write("S98", 0, "latin1");
+    s98[3] = 0x33;
+    s98.writeUInt32LE(10, 4);
+    s98.writeUInt32LE(1000, 8);
+    s98.writeUInt32LE(288, 20);   // the event offset this renderer reads
+    const events = [
+      [0x00, 0x30, 0x01], [0x00, 0x40, 0x00], [0x00, 0x50, 0x1f], [0x00, 0x60, 0x00],
+      [0x00, 0x70, 0x00], [0x00, 0x80, 0x0f], [0x00, 0xb0, 0x38], [0x00, 0xa4, 0x30],
+      [0x00, 0xa0, 0x00], [0x00, 0x28, 0x11],
+    ];
+    let p = 288;
+    for (const ev of events) for (const v of ev) s98[p++] = v;
+    for (let i = 0; i < 6; i++) { s98[p++] = 0xfe; s98[p++] = 0x62; }
+    const s98File = path.join(TMP, "fixture.s98");
+    fs.writeFileSync(s98File, s98);
+
+    const rendered = await audioTool.execute({ op: "score", path: s98File, seconds: 1 });
+    ok("a .s98 stream renders through the borrowed OPNA emulation into a staged WAV",
+      rendered.ok === true && rendered.borrowed === true && rendered.sampleRate === 55467 &&
+      rendered.channels === 2 && rendered.frames === Math.round(55467) &&
+      rendered.rendererSource === "deps/manifest.json" && fs.existsSync(rendered.staged) &&
+      fs.readFileSync(rendered.staged).toString("latin1", 0, 4) === "RIFF",
+      JSON.stringify({ ok: rendered.ok, sampleRate: rendered.sampleRate, frames: rendered.frames, source: rendered.rendererSource }));
+
+    const junk = path.join(TMP, "junk.m");
+    fs.writeFileSync(junk, "not a music file");
+    const junkScore = await audioTool.execute({ op: "score", path: junk });
+    ok("a junk .m is refused by the renderer with its own words",
+      junkScore.ok === false && /refused|invalid/i.test(String(junkScore.note)),
+      String(junkScore.note));
+  } else {
+    ok("the opna renderer (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

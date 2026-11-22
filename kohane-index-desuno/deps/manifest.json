@@ -250,6 +250,38 @@
       "note": "verified by the selfcheck kbi preset conversion section: FPCh and four-char-id conversions carry name, role and byte-faithful parameters, the document round-trips, foreign bytes are refused with the container's own name, batch mode walks a tree and reports the broken files, and the real Sylenth1 and FabFilter corpora convert where present"
     },
     {
+      "id": "ztdw",
+      "kind": "decoder",
+      "name": "kohane sample container reader (ztdw)",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read the custom sample container: the config (a note, then a deflated XML directory) enumerates every sample with its start, length, channels, bit depth, linear peak, pitch offset and round-robin number, and a merge file yields any region as PCM at the declared bit depth - the honest answer to the design's question whether PCM and key data can be extracted. The data base is probed (not guessed) and the receipts carry the declared peak, the observed peak and the gain ratio, because the stored samples are normalised",
+      "usedBy": [
+        "deps/media-registry.mjs (read/decode capability)",
+        "lib/core.mjs (library_audio op=ztdw)"
+      ],
+      "file": "deps/decoders/ztdw.mjs",
+      "sha256": "758b653e9aa19b75a30de790ed91e0de2b3f012388b629dc4829abd58a788309",
+      "bytes": 8307,
+      "note": "verified by the selfcheck ztdw section: a synthesised config inflates to a populated directory with pitch and round-robin parsed, a merge region reads as 24-bit PCM with the declared peak observed, the op surface reports and extracts, and the real corpus (11 913 samples, 10 merge files) reads its recorded first entry at the probed data base with its recorded frames | hash updated deliberately on 2026-11-22: the real corpus exposed three format facts - the directory's length is a BYTE count (a frame count never lands on the next region's start), the data does not sit where the directory says (the base is probed by density, the first region living 192 512 bytes past its recorded start), and the stored samples are per-sample normalised with the declared maxPeakLin as the pre-normalisation gain (observed gain ratio 0.0308 against declared 0.03076)"
+    },
+    {
+      "id": "external-opna",
+      "kind": "binary",
+      "name": "opna-render (external renderer, borrowed from 98fmplayer)",
+      "origin": "built from myon98/98fmplayer (BSD-2-Clause) - the freestanding libopna + fmdriver core compiled to a headless CLI by this project",
+      "licence": "BSD-2-Clause (upstream); confirm before redistributing",
+      "purpose": "render PC-98 music files (PMD / FMP: .m .m2 and friends - the formats ZUN's PC-98 games used, plus .s98 streams) into a 55467 Hz stereo WAV through the OPNA (YM2608) emulation",
+      "usedBy": [
+        "lib/core.mjs (library_audio op=score for .m/.m2/pmd/s98 inputs)"
+      ],
+      "file": null,
+      "path": "D:/kohane-index-desuno/external/opna-render.exe",
+      "sha256": "eee95f9b7b41aa20c3b789e45ae701d00c97a919574855a0c4b6422047b490d2",
+      "bytes": 254693,
+      "note": "not shipped with KID: it is borrowed where it exists, looked up from KOHANE_OPNA first, then from this recorded path; when neither resolves, the engine says so instead of failing silently. The renderer was built at -O0 because the upstream core carries undefined behaviour that -O2 turns into silence, and with a narrow fopen because the wide open rendered silence on this MinGW CRT; sample output still varies between runs on this CRT (recorded in research/notes/2026-11-22-opna-98fmplayer-integration.md), so KID's checks assert the deterministic facts - exit codes, refusals and the WAV structure - while musical verification awaits real .m files"
+    },
+    {
       "id": "external-ffmpeg",
       "kind": "binary",
       "name": "ffmpeg (external decoder, borrowed)",

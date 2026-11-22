@@ -39,7 +39,8 @@ import { encodeKba, decodeKba, kbaStats } from "../deps/decoders/kba.mjs";
 import { convertSf2ToKbb, readKbb, kbbSummary } from "../deps/decoders/kbb.mjs";
 import { writeKbi, readKbi, convertPresetToKbi, convertPresetBatch } from "../deps/decoders/kbi.mjs";
 import { parseFpch } from "../deps/decoders/fxp.mjs";
-import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
+import { readZtdwConfig, readZtdwSample } from "../deps/decoders/ztdw.mjs";
+import { decodeExternally, resolveExternalDecoder, renderOpna } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
 // Runtime portability: worker threads are the one thing a runtime may not provide, so they are resolved
@@ -4775,8 +4776,8 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb | kbi" },
-      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw | kbm | mix | kba | kbb | kbi | ztdw" },
+      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw/kbm: one .kbs score, .kbw envelope or .kbm mix to read; score: a .mid file, or a .m/.m2/.pmd/.m26/.s98 PC-98 music file rendered through the borrowed OPNA emulation" },
       dir: { type: "string", description: "sweep: a directory to walk for audio files" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
       threads: { type: "number", description: "sweep/mix: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
@@ -4786,6 +4787,7 @@ const TOOL_INPUT_SCHEMAS = {
       wave: { type: "string", description: "synth: default oscillator for the score: sine | square | saw | triangle (default square); kbs: the score's default oscillator" },
       adsr: { type: "object", description: "synth/kbs: envelope {a, d, s, r} - attack/decay/release in seconds, sustain as a level 0..1" },
       sampleRate: { type: "number", description: "synth: output sample rate; default 44100; kbs: the sample rate the score records; kbw: the source's sample rate" },
+      seconds: { type: "number", description: "score: how many seconds of a PC-98 music file to render through the OPNA emulation (default 30)" },
       title: { type: "string", description: "kbs: the score title; also used for the companion .kbv view" },
       bpm: { type: "number", description: "kbs: tempo in beats per minute" },
       key: { type: "string", description: "kbs: the key or scale name, e.g. 'D double-harmonic minor'" },
@@ -4802,6 +4804,8 @@ const TOOL_INPUT_SCHEMAS = {
       tier: { type: "string", description: "kba/kbb: the storage tier - adpcm (default) | lossless | raw; the tier is the volume knob" },
       targetRate: { type: "number", description: "kbb: sample rate the converted samples are downsampled toward (default 22050); sources at least twice the target take the honest 2:1 low-pass decimation" },
       ext: { type: "string", description: "kbi: the preset extension to walk in batch mode (default .fxp; .ffp for the plain four-char-id shape)" },
+      index: { type: "number", description: "ztdw: the flat sample-directory index to extract from the merge file" },
+      sample: { type: "string", description: "ztdw: extract the sample whose recorded name matches, instead of an index" },
       out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key); kbs: the .kbs score destination; kbw: the .kbw envelope destination; mix: the mixed WAV/FLAC destination" },
       format: { type: "string", description: "synth: wav | flac, used when out is given and the extension says nothing" },
       dryRun: { type: "boolean", description: "synth: report without writing when out is given" },
@@ -6215,6 +6219,55 @@ const TOOLS = [
         }
       }
 
+      if (op === "ztdw") {
+        // The custom sample container, read natively: the config inflates to the sample directory
+        // (start, length, channels, bit depth, peak, pitch offset, round-robin), and a merge file
+        // yields any sample region as int32 PCM. Extraction is the input; kohane's own containers
+        // are the output.
+        if (args.source) {
+          try {
+            const configDoc = args.path ? readZtdwConfig(String(args.path)) : null;
+            let entry = null;
+            if (configDoc) {
+              const flat = [];
+              for (const m of configDoc.mergeFiles) for (const s of m.sources) flat.push({ mergeFile: m.name, ...s });
+              const idx = Number(args.index);
+              if (Number.isInteger(idx) && idx >= 0 && idx < flat.length) entry = flat[idx];
+              if (!entry && typeof args.sample === "string") entry = flat.find((e) => e.name === args.sample);
+              if (!entry) return { ok: false, op, note: `no sample entry selected (config holds ${flat.length}; pass --index or --sample)` };
+            }
+            if (!entry) return { ok: false, op, note: "ztdw extraction needs the --path config plus --index or --sample" };
+            const mergePath = args.source;
+            const got = readZtdwSample(mergePath, entry);
+            const receipt = {
+              ok: true, op, merge: entry.mergeFile, source: entry.name,
+              start: entry.start, base: got.base, frames: got.frames, channels: got.channels, bitDepth: got.bitDepth,
+              pitch: entry.pitch, rr: entry.rr, declaredPeak: entry.maxPeakLin,
+              observedPeak: Math.round(got.observedPeak * 1e6) / 1e6, gainRatio: got.gainRatio,
+            };
+            if (args.out) {
+              const out = String(args.out);
+              const scale = 2 ** (got.bitDepth - 1);
+              const float = new Float32Array(got.samples.length);
+              for (let i = 0; i < got.samples.length; i++) float[i] = got.samples[i] / scale;
+              const buf = encodeWav16(float, { sampleRate: Number(args.sampleRate) || 44100, channels: got.channels });
+              if (args.dryRun) return Object.assign(receipt, { out, bytes: buf.length, written: false, note: "dryRun: the sample was not written" });
+              fs.writeFileSync(out, buf);
+              return Object.assign(receipt, { out, bytes: buf.length, written: true, kind: "export", note: "this file is an export for other tools; kohane's own storage stays in its own containers" });
+            }
+            return Object.assign(receipt, { note: "the sample region was read as int32 PCM (24-bit values); give --out to stage it as WAV" });
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "ztdw needs the --path config to report the directory, or --path config + --source merge + --index/--sample to extract" };
+        try {
+          return Object.assign({ ok: true, op, path: args.path }, readZtdwConfig(String(args.path)));
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -6254,6 +6307,20 @@ const TOOLS = [
 
       if (op === "score") {
         if (!args.path) return { ok: false, op, note: "missing path" };
+        const ext = path.extname(String(args.path)).toLowerCase();
+        // The PC-98 music long tail is borrowed, not pretended: .m/.m2/PMD (the formats ZUN's
+        // PC-98 games used) and .s98 streams render through the recorded OPNA emulation. The
+        // receipt says which renderer and where the staged WAV is; nothing is claimed beyond
+        // what the renderer wrote.
+        if ([".m", ".m2", ".pmd", ".m26", ".s98"].includes(ext)) {
+          try {
+            const staged = path.join(os.tmpdir(), `kohane-opna-${Date.now()}.wav`);
+            const rendered = renderOpna(String(args.path), { out: staged, seconds: Number(args.seconds) || 30 });
+            return Object.assign({ ok: true, op, path: args.path, borrowed: true }, rendered);
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
         try {
           return Object.assign({ ok: true, op }, readMidiScore(args.path));
         } catch (e) {
@@ -6301,7 +6368,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbi, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kba, kbb, kbi, kbm, kbw, kbs, mix, peaks, pcm, play, score, sweep, info, synth, ztdw` };
     }
   },
   {
