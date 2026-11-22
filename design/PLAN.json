@@ -1,0 +1,182 @@
+{
+  "title": "kohane-index-desuno: an LLM/API-friendly standalone indexer with a Rust core",
+  "goals": [
+    {
+      "id": "standalone",
+      "title": "Standalone software with the mim lineage: memory and indexing, an LLM/API-friendly surface, wide planned integration",
+      "scope": "release",
+      "status": "done",
+      "parent": null,
+      "after": [],
+      "source": "README.md, ARCHITECTURE.md",
+      "notes": "KID began as a generalisation of mim and keeps its memory-and-index bloodline, but it is an independent piece of software now: one engine (16 model-facing tools), one CLI, one MCP surface. This is the root of the plan; every goal below names the files it touches and the suite that judges it.",
+      "touches": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "kohane-index-desuno/package.json"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "lang-plan",
+      "title": "The language plan is settled: a Rust single core, a JS thin shell, the C# workstation unchanged",
+      "scope": "release",
+      "status": "done",
+      "parent": "standalone",
+      "after": [],
+      "source": "research/notes/2026-11-22-language-plan-rust-core.md",
+      "notes": "Rust carries the engine, decoders, DSP and judges (one binary, MCP and CLI entries, same-source WASM); JS keeps only the DSH plugin thin shell as a process bridge; the C# WinUI workstation stays on the HTTP bridge. Migration is stage-by-stage, never big-bang: decoder kernel first, then the tool surface, then the shell. research/ probes stay JS and are not migrated.",
+      "touches": [
+        "research/notes/2026-11-22-language-plan-rust-core.md"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "rust-core",
+      "title": "The Rust decoder kernel: ADPCM, FLAC, sf2, fxp, lm4 and the kb-media containers byte-exact with the JS originals",
+      "scope": "capability",
+      "status": "active",
+      "parent": "lang-plan",
+      "after": [],
+      "source": "rust/decoders/src/main.rs header comment",
+      "notes": "Six bricks are already byte-exact under law 9 cross-reading: ADPCM and FLAC encoders match the JS streams, sf2/fxp/lm4 parsers agree field for field on real corpora, and the four kb-media containers (kbs/kbw/kbv/kbm) write identical envelope bytes, read identical receipts and refuse with the same sentences. The remaining family - ztdw, kba, kbb, kbi and the mix renderer - is the next port, one brick at a time with the same fixture discipline.",
+      "touches": [
+        "rust/decoders/",
+        "tools/selfcheck.mjs"
+      ],
+      "verifiedBy": [
+        "rust/decoders/tests"
+      ]
+    },
+    {
+      "id": "rust-toolface",
+      "title": "The Rust tool surface: a registry that routes every op to the rust core or back to JS, and an exec dispatch",
+      "scope": "capability",
+      "status": "active",
+      "parent": "lang-plan",
+      "after": [
+        "rust-core"
+      ],
+      "source": "rust/decoders/src/registry.rs",
+      "notes": "The registry lists the engine's 16 tools with the ops the Rust core has absorbed; selfcheck asserts the tool set against the TOOLS array in lib/core.mjs (16 against 16). The exec dispatch - turning an op id into a rust call or a js fallback - is the next half of this surface, and is what lets the thin shell route.",
+      "touches": [
+        "rust/decoders/src/registry.rs",
+        "rust/decoders/src/main.rs",
+        "tools/selfcheck.mjs"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "thin-shell",
+      "title": "The DSH plugin thin shell: spawn the Rust binary and forward the JSON tool surface",
+      "scope": "capability",
+      "status": "open",
+      "parent": "lang-plan",
+      "after": [
+        "rust-toolface"
+      ],
+      "source": "research/notes/2026-11-22-language-plan-rust-core.md section 1",
+      "notes": "The borrowing direction flips: where KID once borrowed ffmpeg and opna, DSH will borrow KID's Rust binary. The plugin face stops importing core.mjs directly and becomes a process bridge with JSON forwarding. The judge for this surface will be a selfcheck section that drives an op through both routes and compares.",
+      "touches": [
+        "kohane-index-desuno/mcp/"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "wasm",
+      "title": "The same-source WASM build for the browser and embedding surfaces",
+      "scope": "capability",
+      "status": "open",
+      "parent": "lang-plan",
+      "after": [
+        "rust-core"
+      ],
+      "source": "research/notes/2026-11-22-language-plan-rust-core.md section 1",
+      "notes": "The Rust core compiles to WASM from the same source, so the browser face shares the decoder kernel rather than carrying a JS reimplementation. It follows the decoder kernel: once the family is ported, the WASM target reuses it.",
+      "touches": [
+        "rust/decoders/"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "kpb",
+      "title": "The Kohane Processing Bundle: stages 3-5 (composer with waterfall intake, mixing, volume window with asset conversion) are in",
+      "scope": "capability",
+      "status": "done",
+      "parent": "standalone",
+      "after": [],
+      "source": "research/notes/2026-10-15-kpb-design.md; tools/selfcheck.mjs kpb sections",
+      "notes": "The sealed .kpb envelope is judged by the 8-20 percent content-volume window, the media self-proof replays a score through the synth, the mixer renders stems through a verified .kbm, and the asset conversion (sf2 to kbb, presets to kbi, ztdw probes) rides the same container family. The kb-media containers this goal produced are now ported to Rust under rust-core.",
+      "touches": [
+        "kohane-index-desuno/deps/decoders/kb-media.mjs",
+        "kohane-index-desuno/deps/decoders/mix.mjs",
+        "kohane-index-desuno/deps/decoders/kba.mjs",
+        "kohane-index-desuno/deps/decoders/kbb.mjs",
+        "kohane-index-desuno/deps/decoders/kbi.mjs",
+        "kohane-index-desuno/lib/core.mjs"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "kpb-assets",
+      "title": "The material side of the bundle: wavetable-versus-recording classification, art and doc disposition, the full SD-90 conversion volume, aupreset conversion",
+      "scope": "capability",
+      "status": "open",
+      "parent": "kpb",
+      "after": [],
+      "source": "research/notes/2026-11-22-ztdw-container.md; TODO.md",
+      "notes": "The remaining items are corpus-level: classify the Xfer wavetable set against recordings, decide where the art and manual corpus lands, measure the whole SD-90 conversion, and convert the .aupreset set. The ztdw container reader already probes the Heavier7Strings corpus and is the tool this goal leans on.",
+      "touches": [
+        "kohane-index-desuno/deps/decoders/ztdw.mjs"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "music-embed",
+      "title": "An 8-16 bit music piece embeddable in an exe, on the SD-90 plus synths, fusing Hirasawa and ZUN styles",
+      "scope": "capability",
+      "status": "open",
+      "parent": "kpb",
+      "after": [],
+      "source": "research/notes/2026-11-22-flp-study-alice-and-yu.md",
+      "notes": "The piece is composed in KID itself, written through the composer and the .kbs/.kbw containers, rendered by the synth into a small embeddable stream (adpcm or raw tier), with SD-90 as the base instrumentation plus additional synth voices. The two FLP studies (Alice and Yu) feed the arrangement; Hirasawa's layering and ZUN's pentatonic turnarounds are the reference blend.",
+      "touches": [
+        "kohane-index-desuno/deps/decoders/synth.mjs"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    },
+    {
+      "id": "lm4",
+      "title": "LM4 Mark II integration: the 64-bit bridge is built, the drumkit indexing is in, the host-side test and the KID side remain",
+      "scope": "capability",
+      "status": "active",
+      "parent": "standalone",
+      "after": [],
+      "source": "kohane-index-desuno/deps/decoders/lm4.mjs",
+      "notes": "The kit parser reads the plain-text pad rows with the GM MIDI map and is ported to Rust against the real Wizoo kit. The 64-bit jBridge proxy pair (LM4-MarkII.64.dll as a Proxy64 copy next to the original 32-bit dll) is built and waits on the host-side GUI test in FL; the KID side then indexes the full content tree.",
+      "touches": [
+        "kohane-index-desuno/deps/decoders/lm4.mjs",
+        "rust/decoders/src/parsers/lm4.rs"
+      ],
+      "verifiedBy": [
+        "tools/selfcheck.mjs"
+      ]
+    }
+  ]
+}
