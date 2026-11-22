@@ -2017,6 +2017,65 @@ section("rust cross-check");
     ok("the rust FLAC port is byte-exact with the JS original",
       rustFlac.length === jsFlac.length && rustFlac.equals(jsFlac),
       JSON.stringify({ js: jsFlac.length, rust: rustFlac.length }));
+
+    // The parser family: Rust receipts must agree with the JS originals field for field.
+    const runJson = (cmd, file) => {
+      const r = spawnSync(rustBin, [cmd, file], { encoding: "utf8", windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
+      if (r.error || r.status !== 0) return null;
+      try { return JSON.parse(r.stdout); } catch { return null; }
+    };
+    const { readSf2 } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "sf2.mjs")).href);
+    const sf2Real = "D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2";
+    if (fs.existsSync(sf2Real)) {
+      const jsFont = readSf2(sf2Real);
+      const rFont = runJson("sf2", sf2Real);
+      ok("the rust sf2 parser agrees with the JS original on the real font",
+        rFont && rFont.samples.length === jsFont.samples.length && rFont.presets.length === jsFont.presets.length &&
+        rFont.smplBytes === jsFont.smplBytes && rFont.smplAt === jsFont.smplAt &&
+        rFont.samples[0].sampleRate === jsFont.samples[0].sampleRate && rFont.samples[0].originalPitch === jsFont.samples[0].originalPitch,
+        JSON.stringify({ js: jsFont.summary, rust: rFont && rFont.summary }));
+    } else {
+      ok("the rust sf2 parser (skipped: no real font)", true, "skipped");
+    }
+    const { parseFpch: parseFpchJs } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "fxp.mjs")).href);
+    const fxpSample = "D:/Sylenth1";
+    if (fs.existsSync(fxpSample)) {
+      let fxpFile = null;
+      const walkOne = (d) => {
+        if (fxpFile) return;
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          if (fxpFile) return;
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) walkOne(p);
+          else if (/\.fxp$/i.test(e.name)) fxpFile = p;
+        }
+      };
+      walkOne(fxpSample);
+      if (fxpFile) {
+        const jsF = parseFpchJs(fs.readFileSync(fxpFile));
+        const rF = runJson("fxp", fxpFile);
+        ok("the rust fxp parser agrees with the JS original on a real preset",
+          rF && rF.kind === jsF.kind && rF.plugin === jsF.plugin && rF.name === jsF.name &&
+          rF.bodyAt === jsF.bodyAt && rF.bodyBytes === jsF.bodyBytes && rF.fileBytes === jsF.fileBytes,
+          JSON.stringify({ js: jsF, rust: rF }));
+      } else {
+        ok("the rust fxp parser (skipped: no preset found)", true, "skipped");
+      }
+    } else {
+      ok("the rust fxp parser (skipped: no corpus)", true, "skipped");
+    }
+    const { parseLm4Kit: parseLm4Js } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "lm4.mjs")).href);
+    const lm4Real = "D:/LM4Mark2/LM4-MarkII Content/Wizoo Acoustic/Wizoo Rock Kit.wav.txt";
+    if (fs.existsSync(lm4Real)) {
+      const jsK = parseLm4Js(fs.readFileSync(lm4Real, "utf8"));
+      const rK = runJson("lm4", lm4Real);
+      ok("the rust lm4 parser agrees with the JS original on the real kit",
+        rK && rK.name === jsK.name && rK.pads.length === jsK.pads.length &&
+        rK.pads[0].midi === jsK.pads[0].midi && rK.pads[0].velHi === jsK.pads[0].velHi,
+        JSON.stringify({ js: { name: jsK.name, pads: jsK.padCount }, rust: rK && { name: rK.name, pads: rK.padCount } }));
+    } else {
+      ok("the rust lm4 parser (skipped: no kit)", true, "skipped");
+    }
   } else {
     ok("the rust cross-check (skipped: rust binary not built)", true, "skipped");
   }

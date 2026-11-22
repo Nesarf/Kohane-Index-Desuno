@@ -3,4 +3,6 @@
 pub mod adpcm;
 pub mod bitwriter;
 pub mod flac;
+pub mod json;
 pub mod md5;
+pub mod parsers;
