@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, kba, kbb, kbi, mix, registry, ztdw};
+use kohane_decoder::{adpcm, dispatch, flac, kba, kbb, kbi, mix, registry, ztdw};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -156,6 +156,7 @@ fn main() -> ExitCode {
         Some("kbi") => cmd_kbi(&args),
         Some("ztdw") => cmd_ztdw(&args),
         Some("mix") => cmd_mix(&args),
+        Some("op") => cmd_op(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -186,6 +187,7 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
             eprintln!("       kohane-decoder mix <stems.json> <mix.json> [sampleRate]");
             eprintln!("       kohane-decoder mix pan <value>");
+            eprintln!("       kohane-decoder op <tool> <op> [args.json|-]");
             ExitCode::from(2)
         }
     }
@@ -694,4 +696,39 @@ fn cmd_mix(args: &[String]) -> ExitCode {
             }
         }
     }
+}
+
+fn cmd_op(args: &[String]) -> ExitCode {
+    let (Some(tool), Some(op)) = (args.get(2), args.get(3)) else {
+        eprintln!("usage: kohane-decoder op <tool> <op> [args.json|-]");
+        return ExitCode::from(2);
+    };
+    let text = match args.get(4).map(String::as_str) {
+        None => "{}".to_string(),
+        Some("-") => {
+            let mut s = String::new();
+            if let Err(e) = std::io::stdin().read_to_string(&mut s) {
+                eprintln!("cannot read args from stdin: {e}");
+                return ExitCode::from(1);
+            }
+            s
+        }
+        Some(file) => match fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("cannot read {file}: {e}");
+                return ExitCode::from(1);
+            }
+        },
+    };
+    let params = match kohane_decoder::json::parse(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(1);
+        }
+    };
+    let answer = dispatch::dispatch(tool, op, &params);
+    println!("{}", answer.render());
+    ExitCode::SUCCESS
 }

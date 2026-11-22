@@ -2,6 +2,7 @@
 // the tests exercise the same code the JS side is cross-checked against.
 pub mod adpcm;
 pub mod bitwriter;
+pub mod dispatch;
 pub mod flac;
 pub mod json;
 pub mod kba;

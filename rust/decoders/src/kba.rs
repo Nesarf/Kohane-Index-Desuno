@@ -82,6 +82,7 @@ pub struct KbaReceipt {
     pub frames: u32,
     pub pcm_frames: usize,
     pub pcm_md5: String,
+    pub decoded_peak: i64,
 }
 
 impl KbaReceipt {
@@ -196,6 +197,7 @@ pub fn decode_kba(buf: &[u8]) -> Result<KbaReceipt, String> {
         frames,
         pcm_frames: pcm.len(),
         pcm_md5: hex16(md5::Md5::digest(&pcm_le_bytes(&pcm))),
+        decoded_peak: pcm.iter().map(|x| x.unsigned_abs() as i64).max().unwrap_or(0),
     })
 }
 

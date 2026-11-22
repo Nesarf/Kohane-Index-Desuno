@@ -2520,6 +2520,67 @@ section("rust cross-check");
         run.status === 1 && rustMessage === jsMessage,
         JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
     }
+
+    // The exec dispatch: a wired op answers in the JS tool's own shape, an unwired one says so and
+    // names the engine that will handle it. The three wired paths are judged against the JS tool
+    // surface string for string.
+    const audioToolForDispatch = tool("library_audio");
+    if (audioToolForDispatch) {
+      const opArgs = (obj) => {
+        const f = path.join(TMP, "rust-x-op-args.json");
+        fs.writeFileSync(f, JSON.stringify(obj));
+        return f;
+      };
+      {
+        const kbaFile = path.join(TMP, "rust-x-adpcm.kba");
+        if (fs.existsSync(kbaFile)) {
+          const js = await audioToolForDispatch.execute({ op: "kba", path: kbaFile });
+          const run = spawnSync(rustBin, ["op", "library_audio", "kba", opArgs({ path: kbaFile })], { encoding: "utf8", windowsHide: true });
+          const rust = (run.stdout || "").trim();
+          const jsText = JSON.stringify(js);
+          ok("the rust op dispatch answers kba read in the JS tool's own shape",
+            run.status === 0 && rust === jsText,
+            JSON.stringify({ js: jsText.slice(0, 200), rust: rust.slice(0, 200), status: run.status }));
+        } else {
+          ok("the rust op dispatch kba read (skipped: no fixture container)", true, "skipped");
+        }
+      }
+      {
+        const kbbFile = path.join(TMP, "rust-x.kbb");
+        if (fs.existsSync(kbbFile)) {
+          const js = await audioToolForDispatch.execute({ op: "kbb", path: kbbFile });
+          const run = spawnSync(rustBin, ["op", "library_audio", "kbb", opArgs({ path: kbbFile })], { encoding: "utf8", windowsHide: true });
+          const rust = (run.stdout || "").trim();
+          const jsText = JSON.stringify(js);
+          ok("the rust op dispatch answers kbb read in the JS tool's own shape",
+            run.status === 0 && rust === jsText,
+            JSON.stringify({ js: jsText.slice(0, 160), rust: rust.slice(0, 160), status: run.status }));
+        } else {
+          ok("the rust op dispatch kbb read (skipped: no fixture bank)", true, "skipped");
+        }
+      }
+      if (fs.existsSync(realSf2)) {
+        const js = await audioToolForDispatch.execute({ op: "kbb", out: path.join(TMP, "rust-x-op-dry.kbb"), source: realSf2, dryRun: true });
+        const run = spawnSync(rustBin, ["op", "library_audio", "kbb", opArgs({ out: path.join(TMP, "rust-x-op-dry.kbb"), source: realSf2, dryRun: true })], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+        const rust = (run.stdout || "").trim();
+        const jsText = JSON.stringify(js);
+        ok("the rust op dispatch answers kbb convert dryRun in the JS tool's own shape",
+          run.status === 0 && rust === jsText,
+          JSON.stringify({ js: jsText.slice(0, 160), rust: rust.slice(0, 160), status: run.status }));
+      } else {
+        ok("the rust op dispatch kbb convert (skipped: no real SoundFont)", true, "skipped");
+      }
+      {
+        const run = spawnSync(rustBin, ["op", "library_audio", "peaks", opArgs({})], { encoding: "utf8", windowsHide: true });
+        let r = null;
+        try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+        ok("the rust op dispatch says handled:false and names js for an unwired op",
+          r && r.handled === false && r.engine === "js",
+          JSON.stringify({ rust: r, status: run.status }));
+      }
+    } else {
+      ok("the rust op dispatch (skipped: no library_audio tool registered)", true, "skipped");
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {
