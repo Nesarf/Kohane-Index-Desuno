@@ -1260,6 +1260,134 @@ section("kpb bundle face");
     JSON.stringify({ rem: rem.ok, list2: list2.count }));
 }
 
+// ---------------------------------------------------------------- kpb media (stage 3)
+section("kpb media (stage 3)");
+{
+  const fmtTool = tool("library_format");
+  const audioTool = tool("library_audio");
+  const media = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kb-media.mjs")).href);
+  const { synthesize } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "synth.mjs")).href);
+
+  // The stage-3 acceptance: the score replays, the wave draws, the view lays out - each inside the
+  // bundle, proved at verify time. First the containers themselves, then the bundle that carries them.
+
+  const notes4 = [
+    { t: 0, dur: 0.25, pitch: 74, vel: 0.85, wave: "square" },
+    { t: 0.25, dur: 0.25, pitch: 76, vel: 0.8, wave: "square" },
+    { t: 0.5, dur: 0.5, pitch: 62, vel: 0.22, wave: "saw" },
+    { t: 0.5, dur: 0.5, pitch: 69, vel: 0.18, wave: "saw" },
+  ];
+  const kbsBuf = media.writeKbs({ title: "stage-3 fixture", bpm: 155, key: "D double-harmonic minor", parts: ["lead", "pad"], notes: notes4, wave: "square" });
+  const scoreBack = media.readKbs(kbsBuf);
+  ok("a .kbs score round-trips field for field",
+    scoreBack.format === "kohane-score" && scoreBack.title === "stage-3 fixture" && scoreBack.bpm === 155 &&
+    scoreBack.key === "D double-harmonic minor" && scoreBack.parts.length === 2 && scoreBack.notes.length === 4 &&
+    scoreBack.notes[0].pitch === 74 && scoreBack.notes[3].wave === "saw",
+    JSON.stringify({ title: scoreBack.title, notes: scoreBack.notes.length }));
+
+  const replayed = media.replayKbs(kbsBuf);
+  const direct = synthesize({ sampleRate: replayed.score.sampleRate, notes: notes4, wave: "square" });
+  ok("the score replays through the synth and matches a direct render",
+    replayed.rendered.frames === direct.frames && replayed.rendered.frames > 0,
+    JSON.stringify({ frames: replayed.rendered.frames, expected: direct.frames }));
+
+  let kbsJunk = null;
+  try { media.readKbs(Buffer.from("hello, not a score")); } catch (e) { kbsJunk = String(e.message); }
+  ok("a non-score is refused with the score's own name",
+    kbsJunk !== null && /not a kohane score/.test(kbsJunk), kbsJunk);
+
+  let badNote = null;
+  try { media.readKbs(media.writeKbs({ notes: [{ t: 0, dur: 0.1, pitch: 300 }] })); } catch (e) { badNote = String(e.message); }
+  ok("a note outside the MIDI range is refused, not handed downstream",
+    badNote !== null && /note 0/.test(badNote), badNote);
+
+  const kbwBuf = media.writeKbw({ sampleRate: 44100, frames: 1200, bucketSize: 512, buckets: [[-0.5, 0.5], [-0.2, 0.8], [0.0, 1.0]] });
+  const envBack = media.readKbw(kbwBuf);
+  ok("a .kbw envelope round-trips and covers its declared frames",
+    envBack.frames === 1200 && envBack.buckets.length === 3 && envBack.buckets[2][1] === 1 && envBack.coversAll === true,
+    JSON.stringify({ buckets: envBack.buckets.length, coverage: envBack.coverage, coversAll: envBack.coversAll }));
+
+  const kbvBuf = media.writeKbv({ title: "stage-3 view", lanes: 88, octaveLines: [12, 24, 36, 48, 60, 72, 84], palette: ["paper-white", "red", "tea-ink", "navy"] });
+  const viewBack = media.readKbv(kbvBuf);
+  ok("a .kbv view round-trips with lanes and palette",
+    viewBack.lanes === 88 && viewBack.octaveLines.length === 7 && viewBack.palette.length === 4,
+    JSON.stringify({ lanes: viewBack.lanes, palette: viewBack.palette }));
+
+  const scoreFile = path.join(TMP, "stage3.kbs");
+  fs.writeFileSync(scoreFile, kbsBuf);
+  const viewFile = path.join(TMP, "stage3.kbv");
+  fs.writeFileSync(viewFile, kbvBuf);
+  const kbsRead = await audioTool.execute({ op: "kbs", path: scoreFile });
+  ok("library_audio op=kbs reads the score, replays it and picks up the companion view",
+    kbsRead.ok === true && kbsRead.notes === 4 && kbsRead.replayed.frames > 0 && kbsRead.view && kbsRead.view.lanes === 88,
+    JSON.stringify({ ok: kbsRead.ok, notes: kbsRead.notes, view: kbsRead.view && kbsRead.view.lanes }));
+
+  const kbsOut = path.join(TMP, "written.kbs");
+  const kbsWrite = await audioTool.execute({ op: "kbs", out: kbsOut, title: "written", bpm: 120, key: "C", notes: notes4, layout: { lanes: 88, octaveLines: [12], palette: ["paper-white"] } });
+  const writtenBack = media.readKbs(fs.readFileSync(kbsOut));
+  ok("library_audio op=kbs writes a score and its companion view",
+    kbsWrite.ok === true && writtenBack.notes.length === 4 && writtenBack.title === "written" &&
+    fs.existsSync(kbsOut.replace(/\.kbs$/i, "") + ".kbv"),
+    JSON.stringify({ ok: kbsWrite.ok, notes: writtenBack.notes.length }));
+
+  const kbwOut = path.join(TMP, "written.kbw");
+  const wavSrc = path.join(TMP, "env-src.wav");
+  const renderedSrc = synthesize({ sampleRate: 44100, notes: [{ t: 0, dur: 0.1, pitch: 69, wave: "square" }] });
+  // the WAV source: write a canonical 16-bit mono WAV by hand around the synth's own PCM,
+  // so the fixture needs no external encoder and no extra files.
+  {
+    const data = Buffer.alloc(44 + renderedSrc.samples.length * 2);
+    data.write("RIFF", 0); data.writeUInt32LE(36 + renderedSrc.samples.length * 2, 4); data.write("WAVE", 8);
+    data.write("fmt ", 12); data.writeUInt32LE(16, 16); data.writeUInt16LE(1, 20); data.writeUInt16LE(1, 22);
+    data.writeUInt32LE(44100, 24); data.writeUInt32LE(88200, 28); data.writeUInt16LE(2, 32); data.writeUInt16LE(16, 34);
+    data.write("data", 36); data.writeUInt32LE(renderedSrc.samples.length * 2, 40);
+    for (let i = 0; i < renderedSrc.samples.length; i++) data.writeInt16LE(Math.round(renderedSrc.samples[i] * 32767), 44 + i * 2);
+    fs.writeFileSync(wavSrc, data);
+  }
+  const kbwWrite = await audioTool.execute({ op: "kbw", out: kbwOut, source: wavSrc, buckets: 64 });
+  const kbwBack = media.readKbw(fs.readFileSync(kbwOut));
+  ok("library_audio op=kbw measures a WAV source into a .kbw envelope",
+    kbwWrite.ok === true && kbwWrite.written === true && kbwBack.frames === renderedSrc.frames && kbwBack.buckets.length === 64,
+    JSON.stringify({ ok: kbwWrite.ok, frames: kbwBack.frames, buckets: kbwBack.buckets.length }));
+
+  // The bundle that carries the three containers: verify must self-prove all of them, and a bundle
+  // whose score was emptied must fail the proof.
+  const makeMediaBundle = (emptyScore) => {
+    const kbsPayload = (emptyScore ? media.writeKbs({ title: "emptied", notes: [] }) : kbsBuf).toString("base64");
+    const payload = {
+      bundle: { name: "Media Fixture Bundle", version: "0.2.0", sourceTotalBytes: 100000, capabilities: ["Composer", "Mixer"] },
+      media: { files: [
+        { name: "stage3.kbs", kind: "kbs", base64: kbsPayload },
+        { name: "stage3.kbw", kind: "kbw", base64: kbwBuf.toString("base64") },
+        { name: "stage3.kbv", kind: "kbv", base64: kbvBuf.toString("base64") },
+      ] },
+      padding: "p".repeat(7000),
+    };
+    return JSON.stringify({ format: "kohane-bundle", version: 1, hint: "sealed by kohane-index-desuno for this installation - open with library_format op=kpb-install", sealed: m.encryptSensitive(payload) });
+  };
+  const mediaFile = path.join(TMP, "media-fixture.kpb");
+  fs.writeFileSync(mediaFile, makeMediaBundle(false));
+  const mediaVer = await fmtTool.execute({ op: "kpb-verify", path: mediaFile });
+  ok("a bundle carrying .kbs/.kbw/.kbv self-proves on verify (all three checks pass)",
+    mediaVer.ok === true && Array.isArray(mediaVer.mediaChecks) && mediaVer.mediaChecks.length === 3 &&
+    mediaVer.mediaChecks.every((c) => c.ok) &&
+    mediaVer.mediaChecks.some((c) => c.kind === "kbs") && mediaVer.mediaChecks.some((c) => c.kind === "kbw") && mediaVer.mediaChecks.some((c) => c.kind === "kbv"),
+    JSON.stringify(mediaVer.mediaChecks));
+
+  const emptyFile = path.join(TMP, "media-empty-score.kpb");
+  fs.writeFileSync(emptyFile, makeMediaBundle(true));
+  const emptyVer = await fmtTool.execute({ op: "kpb-verify", path: emptyFile });
+  ok("a bundle whose score was emptied fails verification with the media reason",
+    emptyVer.ok === false && Array.isArray(emptyVer.mediaChecks) &&
+    emptyVer.mediaChecks.some((c) => c.kind === "kbs" && c.ok === false),
+    JSON.stringify({ ok: emptyVer.ok, note: emptyVer.note }));
+
+  const emptyInst = await fmtTool.execute({ op: "kpb-install", path: emptyFile });
+  ok("install refuses a bundle whose media self-proof fails",
+    emptyInst.ok === false && /media self-proof/.test(String(emptyInst.note)),
+    String(emptyInst.note));
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

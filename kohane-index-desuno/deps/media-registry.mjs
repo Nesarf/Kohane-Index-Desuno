@@ -13,24 +13,29 @@ import { capabilities as flacWriter } from "./decoders/flac-encoder.mjs";
 import { capabilities as synth } from "./decoders/synth.mjs";
 import { capabilities as sf2 } from "./decoders/sf2.mjs";
 import { capabilities as fxp } from "./decoders/fxp.mjs";
+import { capabilities as kbMedia } from "./decoders/kb-media.mjs";
 
-/** Every decoder KID owns. A decoder not listed here is not part of the surface, whatever it does. */
-export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter, synth, sf2, fxp];
+/** Every decoder KID owns. A decoder not listed here is not part of the surface, whatever it does.
+ *  One module may declare a whole family (kb-media speaks for the .kbs/.kbw/.kbv containers). */
+export const MEDIA_MODULES = [flac, matroska, isobmff, ogg, riff, flacWriter, synth, sf2, fxp, kbMedia];
 
 const LEVEL_ORDER = { none: 0, metadata: 1, partial: 2, full: 3 };
 
 export function mediaCapabilities() {
   const containers = [];
   for (const m of MEDIA_MODULES) {
-    containers.push({
-      id: m.id,
-      kohaneName: m.kohaneName || `Kohane Bassline ${m.container} reader`,
-      container: m.container,
-      read: m.read,
-      decode: m.decode,
-      encode: m.encode,
-      verifiedAgainst: m.verifiedAgainst,
-    });
+    const list = Array.isArray(m) ? m : [m];
+    for (const c of list) {
+      containers.push({
+        id: c.id,
+        kohaneName: c.kohaneName || `Kohane Bassline ${c.container} reader`,
+        container: c.container,
+        read: c.read,
+        decode: c.decode,
+        encode: c.encode,
+        verifiedAgainst: c.verifiedAgainst,
+      });
+    }
   }
   const count = (level) => containers.filter((c) => (c.decode?.level || "none") === level).length;
   return {

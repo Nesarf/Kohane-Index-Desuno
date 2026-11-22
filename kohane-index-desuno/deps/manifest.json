@@ -168,6 +168,22 @@
       "note": "verified by a synthesised FPCh/FBCh whose values were chosen in advance, plus real presets (Sylenth1 syl1, Darbuka WvpA) where present. The real files proved the name is a NUL-terminated string rather than the length-prefixed field the first guess assumed, and that .fxb banks carry FBCh where .fxp presets carry FPCh. The local index tool read 58406 files under D:/Sylenth1 into 7 plugin groups (58392 syl1 incl. 2212 banks, 8 XfsX, and single files from z3ta/SWSP/KLMV/Dune2), 1 unreadable"
     },
     {
+      "id": "kb-media",
+      "kind": "decoder",
+      "name": "kohane score, wave and view containers",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read and write kohane's own media containers - the .kbs score (title/tempo/key/parts/notes in the synth's second space), the .kbw wave envelope (min/max buckets over a declared frame count) and the .kbv view layout (lanes, octave lines, palette) - the '作编混' side of the .kb family, where third-party formats stay inputs",
+      "usedBy": [
+        "deps/media-registry.mjs (three container capabilities)",
+        "lib/core.mjs (library_audio op=kbs and op=kbw, and the kpb-install/kpb-verify media self-proof)"
+      ],
+      "file": "deps/decoders/kb-media.mjs",
+      "sha256": "f955bb1da0d83e5b8b39589f9d088be759e134f9c76a9309351fef96f3f8a0c6",
+      "bytes": 9923,
+      "note": "verified by the selfcheck kpb media (stage 3) section: each container round-trips field for field, the score replays through the synth with the same frame count as a direct render, malformed scores are refused with the container's own name, the bundle self-proof passes all three checks on verify, a bundle whose score was emptied fails verification, and install refuses the same bundle"
+    },
+    {
       "id": "external-ffmpeg",
       "kind": "binary",
       "name": "ffmpeg (external decoder, borrowed)",

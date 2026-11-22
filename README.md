@@ -71,9 +71,9 @@ npm run verify      # = npm run check + npm run selfcheck
 | `check-portability` | 平台分支各有对应实现（不是只在 Windows 上能跑） |
 | `check-isolation` | 交付包不引用兄弟项目、不带厂商品牌 |
 | `check-contract` | 每个工具名副其实：键集关闭、op 面自洽、**未知 op 必被拒绝**、只读探针必能应答 |
-| `selfcheck` | 端到端回归：**281 项断言**（签名识别、探测、分析器、库不变式、加密、能力目录、索引对账、会话读取、宿主生成、工具候选机制、FLAC 编码与独立走链、注册机音乐合成、MIDI 读谱、SoundFont 读表、FL 预置读头、kohane 格式族视图、KPB 束面） |
+| `selfcheck` | 端到端回归：**293 项断言**（签名识别、探测、分析器、库不变式、加密、能力目录、索引对账、会话读取、宿主生成、工具候选机制、FLAC 编码与独立走链、注册机音乐合成、MIDI 读谱、SoundFont 读表、FL 预置读头、kohane 格式族视图、KPB 束面、KPB 内容物自证） |
 
-当前基线：**16 工具 · 113 签名 · selfcheck 281/281 · 五道检查全绿**。
+当前基线：**16 工具 · 113 签名 · selfcheck 293/293 · 五道检查全绿**。
 
 ## 6. 桌面工作站
 

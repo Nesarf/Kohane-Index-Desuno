@@ -33,6 +33,7 @@ import { readOgg } from "../deps/decoders/ogg.mjs";
 import { readRiff } from "../deps/decoders/riff.mjs";
 import { encodeFlac, encodeWav16 } from "../deps/decoders/flac-encoder.mjs";
 import { synthesize } from "../deps/decoders/synth.mjs";
+import { readKbs, writeKbs, replayKbs, readKbw, writeKbw, readKbv, writeKbv } from "../deps/decoders/kb-media.mjs";
 import { decodeExternally, resolveExternalDecoder } from "../deps/external.mjs";
 import { readUnityAsset } from "../deps/decoders/unity-asset.mjs";
 import { mediaCapabilities } from "../deps/media-registry.mjs";
@@ -4752,18 +4753,26 @@ const TOOL_INPUT_SCHEMAS = {
   library_audio: {
     type: "object",
     properties: {
-      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth" },
-      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM)" },
+      op: { type: "string", description: "peaks (default) | capabilities | export | pcm | play | score | sweep | info | synth | kbs | kbw" },
+      path: { type: "string", description: "peaks: one audio file to measure (WAV or AIFF, PCM); kbs/kbw: one .kbs score or .kbw envelope to read" },
       dir: { type: "string", description: "sweep: a directory to walk for audio files" },
       buckets: { type: "number", description: "how many min/max buckets to return; default 512, max 20000" },
       threads: { type: "number", description: "sweep: how many cores to use; defaults to the machine, and KOHANE_THREADS overrides it" },
       compare: { type: "boolean", description: "sweep: also run the same work on one core and report the speed-up" },
       maxFiles: { type: "number", description: "sweep: cap on files inspected; default 500, max 5000" },
-      notes: { type: "array", description: "synth: note events [{t, dur, pitch, vel?, wave?}], t/dur in seconds, pitch as a MIDI key" },
-      wave: { type: "string", description: "synth: default oscillator for the score: sine | square | saw | triangle (default square)" },
-      adsr: { type: "object", description: "synth: envelope {a, d, s, r} - attack/decay/release in seconds, sustain as a level 0..1" },
-      sampleRate: { type: "number", description: "synth: output sample rate; default 44100" },
-      out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key)" },
+      notes: { type: "array", description: "synth: note events [{t, dur, pitch, vel?, wave?}], t/dur in seconds, pitch as a MIDI key; kbs: the note list to write into the .kbs score" },
+      wave: { type: "string", description: "synth: default oscillator for the score: sine | square | saw | triangle (default square); kbs: the score's default oscillator" },
+      adsr: { type: "object", description: "synth/kbs: envelope {a, d, s, r} - attack/decay/release in seconds, sustain as a level 0..1" },
+      sampleRate: { type: "number", description: "synth: output sample rate; default 44100; kbs: the sample rate the score records; kbw: the source's sample rate" },
+      title: { type: "string", description: "kbs: the score title; also used for the companion .kbv view" },
+      bpm: { type: "number", description: "kbs: tempo in beats per minute" },
+      key: { type: "string", description: "kbs: the key or scale name, e.g. 'D double-harmonic minor'" },
+      parts: { type: "array", description: "kbs: part names for the score's voices" },
+      source: { type: "string", description: "kbw: a WAV/FLAC file whose min/max buckets become the envelope written to --out" },
+      bucketSize: { type: "number", description: "kbw: samples per min/max bucket when writing an envelope; default 512" },
+      channelCount: { type: "number", description: "kbw: channel count recorded in the envelope; default 1" },
+      layout: { type: "object", description: "kbs: when out is given, also write a companion .kbv view - {lanes, octaveLines, palette}" },
+      out: { type: "string", description: "synth: optional destination; given, the PCM is written as WAV or FLAC there (format follows the extension or the format key); kbs: the .kbs score destination; kbw: the .kbw envelope destination" },
       format: { type: "string", description: "synth: wav | flac, used when out is given and the extension says nothing" },
       dryRun: { type: "boolean", description: "synth: report without writing when out is given" },
     },
@@ -5880,6 +5889,93 @@ const TOOLS = [
         }
       }
 
+      if (op === "kbs") {
+        // The score container: reading one reports its facts and replays it through the synth
+        // (the "the score plays back" half of the bundle self-proof); writing one stores the
+        // note list as kohane's own container - MIDI stays an input, never kohane's storage.
+        if (args.out) {
+          try {
+            const buf = writeKbs({
+              title: args.title, bpm: args.bpm, key: args.key, parts: args.parts,
+              notes: Array.isArray(args.notes) ? args.notes : [],
+              wave: args.wave, adsr: args.adsr, sampleRate: args.sampleRate,
+            });
+            if (args.dryRun) return { ok: true, op, out: args.out, bytes: buf.length, written: false, note: "dryRun: the .kbs score was not written" };
+            fs.writeFileSync(String(args.out), buf);
+            const receipt = { ok: true, op, out: args.out, bytes: buf.length, written: true, note: "written: the score is kohane's own container (.kbs), with the note list in the synth's second space" };
+            if (args.layout && typeof args.layout === "object") {
+              const viewOut = String(args.out).replace(/\.kbs$/i, "") + ".kbv";
+              const viewBuf = writeKbv({ title: args.title, lanes: args.layout.lanes, octaveLines: args.layout.octaveLines, palette: args.layout.palette });
+              fs.writeFileSync(viewOut, viewBuf);
+              receipt.companion = viewOut;
+              receipt.companionBytes = viewBuf.length;
+              receipt.note += "; a companion .kbv view layout was written beside it";
+            }
+            return receipt;
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kbs needs a .kbs path to read, or --out with notes to write one" };
+        try {
+          const { score, rendered } = replayKbs(fs.readFileSync(String(args.path)));
+          const receipt = {
+            ok: true, op, path: args.path, title: score.title, bpm: score.bpm, key: score.key,
+            parts: score.parts, notes: score.notes.length, sampleRate: score.sampleRate, wave: score.wave,
+            replayed: { frames: rendered.frames, durationSec: Math.round(rendered.lastEndSec * 1000) / 1000, peaks: rendered.peaks },
+            note: "the score plays back through the synth: the sound is generated from the note list, not stored",
+          };
+          const viewPath = String(args.path).replace(/\.kbs$/i, "") + ".kbv";
+          if (fs.existsSync(viewPath)) {
+            try {
+              const view = readKbv(fs.readFileSync(viewPath));
+              receipt.view = { path: viewPath, title: view.title, lanes: view.lanes, octaveLines: view.octaveLines.length, palette: view.palette };
+            } catch (e) {
+              receipt.view = { path: viewPath, note: String((e && e.message) || e) };
+            }
+          }
+          return receipt;
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
+      if (op === "kbw") {
+        // The wave envelope container: min/max buckets describe the waveform, which is what a
+        // waterfall block and a mixer view both draw - so the envelope is stored, the samples are
+        // not. Writing one measures a WAV/AIFF source with the peaks reader.
+        if (args.out) {
+          try {
+            const src = args.source ? String(args.source) : "";
+            if (!src) return { ok: false, op, note: "kbw needs --source (a WAV/AIFF file) to write an envelope" };
+            const measured = readAudioPeaks(src, Number(args.buckets) || 512);
+            if (measured.ok === false) return { ok: false, op, note: `cannot measure the source: ${measured.note}` };
+            const bucketSize = Number(args.bucketSize) || Math.max(1, Math.ceil(measured.frames / measured.peaks.length));
+            const buf = writeKbw({
+              sampleRate: args.sampleRate || measured.sampleRate, frames: measured.frames,
+              channelCount: args.channelCount || measured.channelCount || 1,
+              bucketSize, buckets: measured.peaks,
+            });
+            if (args.dryRun) return { ok: true, op, out: args.out, bytes: buf.length, written: false, note: "dryRun: the .kbw envelope was not written" };
+            fs.writeFileSync(String(args.out), buf);
+            return {
+              ok: true, op, out: args.out, source: src, bytes: buf.length, written: true,
+              sampleRate: measured.sampleRate, frames: measured.frames, buckets: measured.peaks.length, bucketSize,
+              note: "written: the envelope describes the waveform, so the samples themselves are not kept",
+            };
+          } catch (e) {
+            return { ok: false, op, note: String((e && e.message) || e) };
+          }
+        }
+        if (!args.path) return { ok: false, op, note: "kbw needs a .kbw path to read, or --out with --source to write one" };
+        try {
+          const env = readKbw(fs.readFileSync(String(args.path)));
+          return Object.assign({ ok: true, op, path: args.path }, env);
+        } catch (e) {
+          return { ok: false, op, note: String((e && e.message) || e) };
+        }
+      }
+
       if (op === "capabilities") {
         // The registry answers what KID can open, read, decode and write - assembled from what each
         // module declares, so the answer cannot drift away from the code.
@@ -5966,7 +6062,7 @@ const TOOLS = [
         };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, peaks, pcm, play, score, sweep, info, synth` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: capabilities, export, kbw, kbs, peaks, pcm, play, score, sweep, info, synth` };
     }
   },
   {
@@ -6055,7 +6151,40 @@ const TOOLS = [
       if (!payload || !payload.bundle || !Array.isArray(payload.bundle.capabilities)) {
         throw new Error("the sealed payload is not a bundle manifest (bundle + capabilities expected)");
       }
-      return { envelope, payload, fileBytes: fs.statSync(file).size };
+      return { envelope, payload, fileBytes: fs.statSync(file).size, mediaChecks: checkBundleMedia(payload) };
+    };
+
+    // The bundle's own media, self-proved inside the seal: a .kbs score replays through the synth,
+    // a .kbw envelope covers its declared frames, a .kbv view carries lanes. A bundle whose media
+    // fails its own proof is not installed and does not verify - the stage-3 acceptance.
+    const checkBundleMedia = (payload) => {
+      const media = payload && payload.media;
+      const checks = [];
+      if (!media || !Array.isArray(media.files)) return { checks, ok: true, note: "no media carried - nothing to self-prove" };
+      for (const f of media.files) {
+        const fail = (detail) => { checks.push({ kind: String(f.kind || ""), name: String(f.name || ""), verdict: "fail", detail, ok: false }); };
+        try {
+          const bytes = Buffer.from(String(f.base64 || ""), "base64");
+          if (f.kind === "kbs") {
+            const { score, rendered } = replayKbs(bytes, { sampleRate: 22050 });
+            const okPlay = rendered.frames > 0 && score.notes.length > 0;
+            checks.push({ kind: "kbs", name: f.name, verdict: okPlay ? "pass" : "fail", detail: `${score.notes.length} notes replayed into ${rendered.frames} frames`, ok: okPlay });
+          } else if (f.kind === "kbw") {
+            const env = readKbw(bytes);
+            const okDraw = env.buckets.length > 0 && env.coverage >= env.frames - env.bucketSize;
+            checks.push({ kind: "kbw", name: f.name, verdict: okDraw ? "pass" : "fail", detail: `${env.buckets.length} buckets over ${env.frames} frames (coverage ${env.coverage})`, ok: okDraw });
+          } else if (f.kind === "kbv") {
+            const view = readKbv(bytes);
+            const okView = view.lanes >= 1 && view.palette.length > 0;
+            checks.push({ kind: "kbv", name: f.name, verdict: okView ? "pass" : "fail", detail: `${view.lanes} lanes, ${view.palette.length} palette entries`, ok: okView });
+          } else {
+            fail("unknown media kind in the bundle");
+          }
+        } catch (e) {
+          fail(String((e && e.message) || e));
+        }
+      }
+      return { checks, ok: checks.every((c) => c.ok) };
     };
 
     if (op === "kpb-install") {
@@ -6065,6 +6194,10 @@ const TOOLS = [
         return { ok: false, op, note: `install failed: ${String((e && e.message) || e)}` };
       }
       const { bundle } = kpb.payload;
+      if (kpb.mediaChecks && kpb.mediaChecks.ok === false) {
+        const bad = kpb.mediaChecks.checks.filter((c) => !c.ok);
+        return { ok: false, op, mediaChecks: kpb.mediaChecks.checks, note: `install failed: the bundle's media self-proof fails (${bad.map((c) => `${c.kind} "${c.name}": ${c.detail}`).join("; ")})` };
+      }
       const ratio = kpb.fileBytes / Math.max(1, Number(bundle.sourceTotalBytes) || 1);
       const installs = loadKpbInstalls();
       if (installs.installs.some((i) => i.name === bundle.name)) {
@@ -6118,12 +6251,19 @@ const TOOLS = [
       // the volume policy is a hard window, not a target: below 8% means content is missing,
       // above 20% means the slimming did not happen - both fail verification.
       const inWindow = ratio >= 0.08 && ratio <= 0.20;
+      const mediaOk = !kpb.mediaChecks || kpb.mediaChecks.ok === true;
+      const okVerdict = inWindow && mediaOk;
+      let note;
+      if (okVerdict) note = "integrity held, the volume ratio sits inside 8%-20% and the carried media self-proves (score replays, envelope draws, view lays out)";
+      else if (!mediaOk) note = `the bundle's media self-proof fails: ${kpb.mediaChecks.checks.filter((c) => !c.ok).map((c) => `${c.kind} "${c.name}": ${c.detail}`).join("; ")} - verification fails`;
+      else note = `the volume ratio ${(ratio * 100).toFixed(1)}% is outside the 8%-20% window - verification fails`;
       return {
-        ok: inWindow, op, name: bundle.name, version: bundle.version,
+        ok: okVerdict, op, name: bundle.name, version: bundle.version,
         fileBytes: kpb.fileBytes, sourceTotalBytes: bundle.sourceTotalBytes,
         ratio: Math.round(ratio * 1000) / 1000, window: [0.08, 0.20],
         capabilities: bundle.capabilities,
-        note: inWindow ? "integrity held and the volume ratio sits inside 8%-20%" : `the volume ratio ${(ratio * 100).toFixed(1)}% is outside the 8%-20% window - verification fails`,
+        mediaChecks: kpb.mediaChecks ? kpb.mediaChecks.checks : [],
+        note,
       };
     }
 
