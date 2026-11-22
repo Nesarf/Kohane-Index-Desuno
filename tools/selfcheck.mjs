@@ -1994,6 +1994,29 @@ section("rust cross-check");
     ok("the rust ADPCM port is byte-exact with the JS original (law 9 cross-reader)",
       rustKba.length === jsKba.length && rustKba.equals(jsKba),
       JSON.stringify({ js: jsKba.length, rust: rustKba.length }));
+
+    // The FLAC half: the JS encoder's PCM stage (round(clamp(x)*32767)) produces the raw bytes the
+    // rust side reads, so both encode the same PCM and the streams must be byte-identical.
+    const { encodeFlac } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "flac-encoder.mjs")).href);
+    const nf = 4096;
+    const float = new Float32Array(nf);
+    for (let i = 0; i < nf; i++) {
+      float[i] = (Math.sin((i * 0.013) % (2 * Math.PI)) * 9000 + Math.sin((i * 0.1) % (2 * Math.PI)) * 3000 + ((i * 37) % 2000) - 1000) / 32767;
+    }
+    const pcmF = new Int16Array(nf);
+    for (let i = 0; i < nf; i++) pcmF[i] = Math.round(Math.max(-1, Math.min(1, float[i] || 0)) * 32767);
+    const jsFlac = encodeFlac(float, { sampleRate: 44100, channels: 1 });
+    const flacRaw = path.join(TMP, "rust-xflac.raw");
+    const flacOut = path.join(TMP, "rust-x.flac");
+    fs.writeFileSync(flacRaw, Buffer.from(pcmF.buffer));
+    const flacRun = spawnSync(rustBin, ["flac", flacRaw, flacOut, "44100", "1"], { encoding: "utf8", windowsHide: true });
+    ok("the rust flac encoder runs on the shared PCM",
+      !flacRun.error && flacRun.status === 0 && fs.existsSync(flacOut),
+      JSON.stringify({ status: flacRun.status, error: flacRun.error && flacRun.error.message }));
+    const rustFlac = fs.readFileSync(flacOut);
+    ok("the rust FLAC port is byte-exact with the JS original",
+      rustFlac.length === jsFlac.length && rustFlac.equals(jsFlac),
+      JSON.stringify({ js: jsFlac.length, rust: rustFlac.length }));
   } else {
     ok("the rust cross-check (skipped: rust binary not built)", true, "skipped");
   }
