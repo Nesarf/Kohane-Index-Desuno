@@ -1193,6 +1193,73 @@ section("kohane format family view");
     JSON.stringify(kb.members.find((m) => m.format === "kb-envelope")));
 }
 
+// ---------------------------------------------------------------- kpb bundle face
+section("kpb bundle face");
+{
+  const fmtTool = tool("library_format");
+  const pluginTool = tool("library_plugin");
+  // A bundle fixture whose real file size lands inside the 8%-20% window: the payload padding
+  // makes the sealed file about 9.6 KB against a declared 100 KB source.
+  const makeBundle = (sourceTotalBytes, padding) => {
+    const payload = { bundle: { name: "Fixture Bundle", version: "0.1.0", sourceTotalBytes, capabilities: ["Composer", "Mixer"] }, assets: { manifest: [{ name: "score.kbs", bytes: 1024 }], padding: "p".repeat(padding) } };
+    const sealed = m.encryptSensitive(payload);
+    return JSON.stringify({ format: "kohane-bundle", version: 1, hint: "sealed by kohane-index-desuno for this installation - open with library_format op=kpb-install", sealed });
+  };
+  const kpbFile = path.join(TMP, "fixture.kpb");
+  fs.writeFileSync(kpbFile, makeBundle(100000, 7000));
+
+  const inst = await fmtTool.execute({ op: "kpb-install", path: kpbFile });
+  ok("a bundle installs and mounts its capabilities",
+    inst.ok === true && inst.name === "Fixture Bundle" && inst.mounted.includes("Composer") && inst.mounted.includes("Mixer"),
+    JSON.stringify({ ok: inst.ok, mounted: inst.mounted }));
+  const list1 = await fmtTool.execute({ op: "kpb-list" });
+  ok("the installed bundle is listed with its facts",
+    list1.count === 1 && list1.installs[0].name === "Fixture Bundle" && list1.installs[0].version === "0.1.0",
+    JSON.stringify(list1.installs));
+  const dirAfter = await pluginTool.execute({ op: "list" });
+  ok("the mounted capabilities are in the local directory",
+    dirAfter.ok && JSON.stringify(dirAfter).includes("Composer") && JSON.stringify(dirAfter).includes("Mixer"));
+
+  const ver = await fmtTool.execute({ op: "kpb-verify", path: kpbFile });
+  ok("verify holds and the volume ratio sits inside 8%-20%",
+    ver.ok === true && ver.ratio >= 0.08 && ver.ratio <= 0.20,
+    JSON.stringify({ ok: ver.ok, ratio: ver.ratio }));
+
+  // A tampered sealed body must fail with the missing-key reason, never "unknown format".
+  const tampered = JSON.parse(fs.readFileSync(kpbFile, "utf8"));
+  tampered.sealed.ct = (tampered.sealed.ct[0] === "0" ? "1" : "0") + tampered.sealed.ct.slice(1);
+  const tamperedFile = path.join(TMP, "tampered.kpb");
+  fs.writeFileSync(tamperedFile, JSON.stringify(tampered));
+  const tamperedVer = await fmtTool.execute({ op: "kpb-verify", path: tamperedFile });
+  ok("a tampered bundle fails with the sealed-key reason",
+    tamperedVer.ok === false && /sealed|key/i.test(String(tamperedVer.note)),
+    String(tamperedVer.note));
+
+  // A bundle whose ratio leaves the window fails verification and says so in numbers.
+  const outFile = path.join(TMP, "out-of-window.kpb");
+  fs.writeFileSync(outFile, makeBundle(1000, 7000));
+  const outVer = await fmtTool.execute({ op: "kpb-verify", path: outFile });
+  ok("an out-of-window ratio fails verification",
+    outVer.ok === false && /outside/.test(String(outVer.note)) && outVer.ratio > 0.2,
+    JSON.stringify({ ok: outVer.ok, ratio: outVer.ratio, note: outVer.note }));
+
+  // A file that is not the bundle envelope is refused as such.
+  const junkFile = path.join(TMP, "junk.kpb");
+  fs.writeFileSync(junkFile, "hello, not a bundle");
+  const junkVer = await fmtTool.execute({ op: "kpb-verify", path: junkFile });
+  ok("a non-bundle file is refused with the marker reason",
+    junkVer.ok === false && /not a bundle/.test(String(junkVer.note)),
+    String(junkVer.note));
+
+  // remove unmounts exactly what the bundle mounted, and the list is empty again.
+  const rem = await fmtTool.execute({ op: "kpb-remove", name: "Fixture Bundle" });
+  const dirGone = await pluginTool.execute({ op: "list" });
+  const list2 = await fmtTool.execute({ op: "kpb-list" });
+  ok("remove unmounts the capabilities and empties the list",
+    rem.ok === true && !JSON.stringify(dirGone).includes("Composer") && list2.count === 0,
+    JSON.stringify({ rem: rem.ok, list2: list2.count }));
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

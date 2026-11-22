@@ -4798,7 +4798,7 @@ const TOOL_INPUT_SCHEMAS = {
       "properties": {
           "op": {
               "type": "string",
-              "description": "kb | list | scan | learn | add | remove | analyzer-add | analyzer-remove | draft | deps | report | deliver | unseal"
+              "description": "kb | list | scan | learn | add | remove | analyzer-add | analyzer-remove | draft | deps | report | deliver | unseal | kpb-install | kpb-list | kpb-verify | kpb-remove"
           },
           "dir": {
               "type": "string",
@@ -6020,6 +6020,134 @@ const TOOLS = [
 
   if (op === "kb") return Object.assign({ ok: true, op }, kbFamily());
 
+  // ---- the KPB bundle face: kpb-install / kpb-list / kpb-verify / kpb-remove -------------
+  // A bundle is kohane's sealed DLC: the payload is encrypted with this installation's master
+  // key, so a bare .kpb outside KID fails with "missing the key", not "unknown format" - and the
+  // plain header says exactly that. Installing mounts the bundle's declared capabilities into
+  // the local directory (law 5: machine differences live in the local table); removing
+  // unmounts them and the directory is exactly as it was.
+  if (op.startsWith("kpb-")) {
+    const kpbInstallFile = () => path.join(libraryDir(), "kpb-installs.json");
+    const loadKpbInstalls = () => {
+      try { return JSON.parse(fs.readFileSync(kpbInstallFile(), "utf8")); } catch { return { installs: [] }; }
+    };
+    const saveKpbInstalls = (d) => {
+      ensureLibrary();
+      fs.writeFileSync(kpbInstallFile(), JSON.stringify(d, null, 2), "utf8");
+    };
+    const readKpb = (file) => {
+      const raw = fs.readFileSync(file);
+      let envelope;
+      try { envelope = JSON.parse(raw.toString("utf8")); } catch { throw new Error("not a bundle (the file is not the kohane-bundle envelope)"); }
+      if (!envelope || envelope.format !== "kohane-bundle") throw new Error("not a bundle (missing the kohane-bundle marker)");
+      if (!envelope.sealed || envelope.sealed.sens !== 1) throw new Error("the bundle carries no sealed payload - it was not made by KID");
+      let payload;
+      try {
+        payload = decryptSensitive(envelope.sealed);
+      } catch (e) {
+        throw new Error("the payload is sealed with another installation's key and cannot be opened here: " + String((e && e.message) || e));
+      }
+      if (payload && payload.__decryptError) {
+        // decryptSensitive swallows the underlying failure into this sentinel; the bundle must
+        // say the design's own words - a bare bundle outside KID fails on the key, not on format.
+        throw new Error("the payload is sealed with another installation's key (or was altered) and cannot be opened here");
+      }
+      if (!payload || !payload.bundle || !Array.isArray(payload.bundle.capabilities)) {
+        throw new Error("the sealed payload is not a bundle manifest (bundle + capabilities expected)");
+      }
+      return { envelope, payload, fileBytes: fs.statSync(file).size };
+    };
+
+    if (op === "kpb-install") {
+      if (!args.path) return { ok: false, op, note: "kpb-install needs the bundle file path" };
+      let kpb;
+      try { kpb = readKpb(String(args.path)); } catch (e) {
+        return { ok: false, op, note: `install failed: ${String((e && e.message) || e)}` };
+      }
+      const { bundle } = kpb.payload;
+      const ratio = kpb.fileBytes / Math.max(1, Number(bundle.sourceTotalBytes) || 1);
+      const installs = loadKpbInstalls();
+      if (installs.installs.some((i) => i.name === bundle.name)) {
+        return { ok: false, op, note: `"${bundle.name}" is already installed (remove it first)` };
+      }
+      // mount the capabilities into the local directory, one by one
+      const mounted = [];
+      const failed = [];
+      const pack0 = loadPluginPack();
+      let pack = normalizePluginPack(pack0);
+      for (const word of bundle.capabilities) {
+        const role = classifyPluginRole(String(word), "");
+        const localName = `kpb:${pluginSlug(word)}`;
+        if (pack.entries.some((e) => pluginKey(e.localName) === pluginKey(localName))) { mounted.push(word); continue; }
+        pack.entries.push({ localName, capability: String(word), name: "", role, kind: "capability", localCategory: "", localVersion: null, localFile: "", origin: "kpb", note: `from bundle ${bundle.name}`, updatedAt: null });
+        mounted.push(word);
+      }
+      savePluginPack(pack);
+      installs.installs.push({
+        name: String(bundle.name), version: String(bundle.version || "0.0.0"),
+        path: String(args.path), installedAt: new Date().toISOString(),
+        capabilities: mounted, failed, fileBytes: kpb.fileBytes,
+        sourceTotalBytes: Number(bundle.sourceTotalBytes) || null, ratio: Math.round(ratio * 1000) / 1000,
+      });
+      saveKpbInstalls(installs);
+      appendLog({ op: "kpb-install", type: "kpb", name: bundle.name, source: "local", disposition: null, detail: `${mounted.length} capability(ies) mounted` });
+      return { ok: true, op, name: bundle.name, version: bundle.version, mounted, ratio: Math.round(ratio * 1000) / 1000, note: "installed: the bundle's capabilities are now part of the local directory" };
+    }
+
+    if (op === "kpb-list") {
+      const installs = loadKpbInstalls();
+      return {
+        ok: true, op, installs: installs.installs.map((i) => ({
+          name: i.name, version: i.version, path: i.path, installedAt: i.installedAt,
+          capabilities: i.capabilities, ratio: i.ratio,
+        })),
+        count: installs.installs.length,
+        note: installs.installs.length ? "" : "no bundle installed",
+      };
+    }
+
+    if (op === "kpb-verify") {
+      if (!args.path) return { ok: false, op, note: "kpb-verify needs the bundle file path" };
+      let kpb;
+      try { kpb = readKpb(String(args.path)); } catch (e) {
+        return { ok: false, op, note: `verify failed: ${String((e && e.message) || e)}` };
+      }
+      const { bundle } = kpb.payload;
+      const sourceTotal = Number(bundle.sourceTotalBytes) || 1;
+      const ratio = kpb.fileBytes / sourceTotal;
+      // the volume policy is a hard window, not a target: below 8% means content is missing,
+      // above 20% means the slimming did not happen - both fail verification.
+      const inWindow = ratio >= 0.08 && ratio <= 0.20;
+      return {
+        ok: inWindow, op, name: bundle.name, version: bundle.version,
+        fileBytes: kpb.fileBytes, sourceTotalBytes: bundle.sourceTotalBytes,
+        ratio: Math.round(ratio * 1000) / 1000, window: [0.08, 0.20],
+        capabilities: bundle.capabilities,
+        note: inWindow ? "integrity held and the volume ratio sits inside 8%-20%" : `the volume ratio ${(ratio * 100).toFixed(1)}% is outside the 8%-20% window - verification fails`,
+      };
+    }
+
+    if (op === "kpb-remove") {
+      const name = String(args.name || "").trim();
+      if (!name) return { ok: false, op, note: "kpb-remove needs the bundle name" };
+      const installs = loadKpbInstalls();
+      const found = installs.installs.find((i) => i.name === name);
+      if (!found) return { ok: false, op, note: `no bundle named "${name}" is installed` };
+      // unmount only the capabilities this bundle mounted, leaving everything else untouched
+      const keys = new Set((found.capabilities || []).map((w) => pluginKey(`kpb:${pluginSlug(w)}`)));
+      const pack = normalizePluginPack(loadPluginPack());
+      const before = pack.entries.length;
+      pack.entries = pack.entries.filter((e) => !keys.has(pluginKey(e.localName)));
+      savePluginPack(pack);
+      installs.installs = installs.installs.filter((i) => i.name !== name);
+      saveKpbInstalls(installs);
+      appendLog({ op: "kpb-remove", type: "kpb", name, source: "local", disposition: null, detail: `${before - pack.entries.length} capability(ies) unmounted` });
+      return { ok: true, op, name, unmounted: before - pack.entries.length, note: "removed: the local directory is exactly as it was before the install" };
+    }
+
+    return { ok: false, op, note: `unknown kpb op "${args.op}"` };
+  }
+
   if (op === "list") {
         // Report cadence is a *reminder for the user*, never an automatic send.
         let lastReport = null;
@@ -6470,7 +6598,7 @@ const TOOLS = [
         return { ok: true, op, file: packFile, removed: before - next.analyzers.length, local: summary(loadLocalFormats()), note: `removed ${before - next.analyzers.length} local analyzer(s)` };
       }
 
-      return { ok: false, op, note: `unknown op "${args.op}", allowed: kb, list, scan, learn, add, remove, analyzer-add, analyzer-remove, draft, deps, report, deliver, unseal` };
+      return { ok: false, op, note: `unknown op "${args.op}", allowed: kb, list, scan, learn, add, remove, analyzer-add, analyzer-remove, draft, deps, report, deliver, unseal, kpb-install, kpb-list, kpb-verify, kpb-remove` };
     }
   },
 
