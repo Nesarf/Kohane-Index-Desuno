@@ -13,26 +13,32 @@ fn cstr(buf: &[u8], at: usize, len: usize) -> String {
     String::from_utf8_lossy(&buf[at..end]).to_string()
 }
 
-struct Bag {
-    gen_index: u16,
-    gen_count: u16,
+// The bag/generator/sample rows are kept in their full JS shape even where this reader does not
+// consume every field yet: the kbb converter (a later port) walks the same zone chains the JS
+// side does, so the fields stay parsed and available rather than being re-read from the file.
+#[allow(dead_code)]
+pub struct Bag {
+    pub gen_index: u16,
+    pub gen_count: u16,
 }
 
-struct Gen {
-    oper: u16,
-    amount: u16,
+#[allow(dead_code)]
+pub struct Gen {
+    pub oper: u16,
+    pub amount: u16,
 }
 
-struct Sample {
-    name: String,
-    start: u32,
-    end: u32,
-    start_loop: u32,
-    end_loop: u32,
-    sample_rate: u32,
-    original_pitch: u8,
-    pitch_correction: i8,
-    sample_type: u16,
+#[allow(dead_code)]
+pub struct Sample {
+    pub name: String,
+    pub start: u32,
+    pub end: u32,
+    pub start_loop: u32,
+    pub end_loop: u32,
+    pub sample_rate: u32,
+    pub original_pitch: u8,
+    pub pitch_correction: i8,
+    pub sample_type: u16,
 }
 
 pub struct Sf2 {

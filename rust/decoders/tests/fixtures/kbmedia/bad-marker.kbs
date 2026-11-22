@@ -1,0 +1,1 @@
+{"format":"kohane-other","version":1,"title":"fixture score","bpm":148.5,"key":"Am","sampleRate":48000,"wave":"saw","adsr":{"a":0.005,"d":0.12,"s":0.7,"r":0.3},"parts":["lead","bass","pad"],"instruments":{"lead":"sd90-synth","bass":"lm4-kick"},"notes":[{"t":0,"dur":0.5,"pitch":60,"vel":0.9,"wave":"square"},{"t":0.5,"dur":0.25,"pitch":64},{"t":1,"dur":1,"pitch":67,"vel":0.4}]}

@@ -1,0 +1,1 @@
+not a kohane score (notes is not a list)

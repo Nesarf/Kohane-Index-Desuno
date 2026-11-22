@@ -1,0 +1,1 @@
+not a kohane score (the bytes are not the container's JSON envelope)

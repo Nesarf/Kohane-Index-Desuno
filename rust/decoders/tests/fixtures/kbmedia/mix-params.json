@@ -1,0 +1,1 @@
+{"title":"fixture mix","sampleRate":48000,"tracks":[{"name":"drums","gain":0.8,"pan":1.7,"route":"master","effects":[{"kind":"eq","note":"low shelf"},{"kind":"","note":""}]},{"name":"synth","gain":1.2,"pan":-0.4,"route":"reverb","effects":[]}],"buses":[{"name":"reverb","gain":0.6,"effects":[{"kind":"delay","note":"dotted 8th"}]}],"master":{"gain":0.9,"effects":[]}}

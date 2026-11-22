@@ -2076,6 +2076,102 @@ section("rust cross-check");
     } else {
       ok("the rust lm4 parser (skipped: no kit)", true, "skipped");
     }
+    // kb-media containers: the write half must be byte-exact with the JS originals, the read half
+    // must agree with the JS readers string for string, and refusals must carry the JS sentences.
+    // The committed fixture test repeats all 17 refusal shapes; three representatives here
+    // re-derive them live against the JS originals.
+    const { writeKbs, readKbs, writeKbw, readKbw, writeKbv, readKbv, writeKbm, readKbm, capabilities: kbCaps } =
+      await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kb-media.mjs")).href);
+    const kbWriters = { kbs: writeKbs, kbw: writeKbw, kbv: writeKbv, kbm: writeKbm };
+    const kbReaders = { kbs: readKbs, kbw: readKbw, kbv: readKbv, kbm: readKbm };
+    const kbParams = {
+      kbs: {
+        title: "selfcheck score", bpm: 148.5, key: "Am", sampleRate: 48000, wave: "saw",
+        adsr: { a: 0.005, d: 0.12, s: 0.7, r: 0.3 }, parts: ["lead", "bass"],
+        instruments: { lead: "sd90-synth" },
+        notes: [{ t: 0, dur: 0.5, pitch: 60, vel: 0.9, wave: "square" }, { t: 1, dur: 0.25, pitch: 64 }],
+      },
+      kbw: { sampleRate: 44100, frames: 1024.7, channelCount: 2, bucketSize: 512, buckets: [[-0.8, 0.1], [0.2, 0.9], [-1, -0.05]] },
+      kbv: { title: "selfcheck view", lanes: 3.5, octaveLines: [0, 12.4, -0.25], palette: ["#39C5BB", "#000000"] },
+      kbm: {
+        tracks: [
+          { name: "drums", gain: 0.8, pan: 1.7, route: "master", effects: [{ kind: "eq", note: "low shelf" }, { kind: "", note: "" }] },
+          { name: "synth", gain: 1.2, pan: -0.4, route: "reverb", effects: [] },
+        ],
+        buses: [{ name: "reverb", gain: 0.6, effects: [{ kind: "delay", note: "dotted 8th" }] }],
+        master: { gain: 0.9, effects: [] },
+      },
+    };
+    for (const kind of Object.keys(kbParams)) {
+      const jsBytes = kbWriters[kind](kbParams[kind]);
+      const rustOut = path.join(TMP, `rust-x.${kind}`);
+      const wrun = spawnSync(rustBin, ["kb", "write", kind, rustOut, "-"],
+        { input: JSON.stringify(kbParams[kind]), encoding: "utf8", windowsHide: true });
+      const rustBytes = fs.existsSync(rustOut) ? fs.readFileSync(rustOut) : Buffer.alloc(0);
+      ok(`the rust ${kind} writer is byte-exact with the JS original`,
+        !wrun.error && wrun.status === 0 && rustBytes.length === jsBytes.length && rustBytes.equals(jsBytes),
+        JSON.stringify({ js: jsBytes.length, rust: rustBytes.length, status: wrun.status, error: wrun.error && wrun.error.message }));
+
+      // read the JS-written bytes back (the write check above already proved rustOut is those bytes)
+      const rrun = spawnSync(rustBin, ["kb", "read", kind, rustOut], { encoding: "utf8", windowsHide: true });
+      let rReceipt = null;
+      if (!rrun.error && rrun.status === 0) {
+        try { rReceipt = JSON.parse(rrun.stdout); } catch { rReceipt = null; }
+      }
+      const jsReceipt = JSON.stringify(kbReaders[kind](jsBytes));
+      ok(`the rust ${kind} reader agrees with the JS reader's own receipt`,
+        rReceipt && JSON.stringify(rReceipt) === jsReceipt,
+        JSON.stringify({ js: jsReceipt, rust: rReceipt && JSON.stringify(rReceipt) }));
+    }
+    const kbRefusalCases = [
+      { kind: "kbs", bad: () => kbWriters.kbs({ ...kbParams.kbs, notes: [{ t: 0, dur: 0.5, pitch: 200 }] }) },
+      { kind: "kbm", bad: () => kbWriters.kbm({ ...kbParams.kbm, tracks: [{ name: "x", route: "ghost" }] }) },
+      {
+        kind: "kbs",
+        bad: () => {
+          const d = JSON.parse(kbWriters.kbs(kbParams.kbs).toString("utf8"));
+          d.version = 2;
+          return Buffer.from(JSON.stringify(d));
+        },
+      },
+    ];
+    for (const c of kbRefusalCases) {
+      const badBytes = c.bad();
+      let jsMessage = "";
+      try { kbReaders[c.kind](badBytes); } catch (e) { jsMessage = e.message; }
+      const f = path.join(TMP, `rust-x-refuse.${c.kind}`);
+      fs.writeFileSync(f, badBytes);
+      const run = spawnSync(rustBin, ["kb", "read", c.kind, f], { encoding: "utf8", windowsHide: true });
+      const rustMessage = (run.stderr || "").trim();
+      ok(`the rust ${c.kind} reader refuses with the JS sentence`,
+        run.status === 1 && rustMessage === jsMessage,
+        JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+    }
+    const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
+    let rCaps = null;
+    if (!capsRun.error && capsRun.status === 0) {
+      try { rCaps = JSON.parse(capsRun.stdout); } catch { rCaps = null; }
+    }
+    ok("the rust capabilities report the four kb containers with the JS shapes",
+      rCaps && Array.isArray(rCaps) && rCaps.length === kbCaps.length &&
+      rCaps.every((c, i) => c.id === kbCaps[i].id && c.kohaneName === kbCaps[i].kohaneName &&
+        c.container === kbCaps[i].container && c.read.level === kbCaps[i].read.level &&
+        c.decode.level === kbCaps[i].decode.level && c.encode.level === kbCaps[i].encode.level),
+      JSON.stringify({ js: kbCaps.map((c) => c.id), rust: rCaps && rCaps.map((c) => c.id) }));
+    const regRun = spawnSync(rustBin, ["registry"], { encoding: "utf8", windowsHide: true });
+    let rReg = null;
+    if (!regRun.error && regRun.status === 0) {
+      try { rReg = JSON.parse(regRun.stdout); } catch { rReg = null; }
+    }
+    const toolSource = fs.readFileSync(path.join(ROOT, "kohane-index-desuno", "lib", "core.mjs"), "utf8");
+    const toolsBlock = toolSource.slice(toolSource.indexOf("const TOOLS = ["));
+    const toolsEnd = toolsBlock.indexOf("\n];");
+    const jsToolNames = [...toolsBlock.slice(0, toolsEnd).matchAll(/name: "([a-z_]+)",\n\s+description:/g)].map((m) => m[1]);
+    const rustToolNames = rReg && rReg.tools && rReg.tools.map((t) => t.name);
+    ok("the rust registry lists the same tool set as the JS engine",
+      rReg && rustToolNames && rustToolNames.length === jsToolNames.length &&
+      jsToolNames.every((n) => rustToolNames.includes(n)),
+      JSON.stringify({ js: jsToolNames.length, rust: rustToolNames && rustToolNames.length }));
   } else {
     ok("the rust cross-check (skipped: rust binary not built)", true, "skipped");
   }

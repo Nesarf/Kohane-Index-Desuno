@@ -21,7 +21,7 @@ tools/                        检查器族（不发布）
 ├─ check-portability.mjs      平台分支对称
 ├─ check-isolation.mjs        交付包与邻居、厂商名隔离
 ├─ check-contract.mjs         工具契约（键集、op 面、拒绝行为）
-├─ selfcheck.mjs              端到端回归（256 断言）
+├─ selfcheck.mjs              端到端回归（357 断言）
 ├─ reference-check.mjs        对兄弟项目的只读差异核对（永不写回）
 └─ .isolation-manifest.json   隔离基线哈希
 
@@ -132,7 +132,7 @@ HKDF 派生 + AES-256-GCM。敏感对象封存；**复审**是显式的：`clear
 | portability | 不是只在一种平台上能跑 | 只写 win32 分支 |
 | isolation | 包是自洽的 | 引用兄弟项目、把厂商名带进结果 |
 | contract | 工具名副其实 | 未知 op 照做、键集敞开、探针不应答 |
-| selfcheck | 行为没退步 | 语义回归（256 项断言） |
+| selfcheck | 行为没退步 | 语义回归（357 项断言） |
 
 **为什么这么多种检查而不是一个大的**：每一种失败模式对应一种读法，坏了能一眼看出坏在哪一类。
 
