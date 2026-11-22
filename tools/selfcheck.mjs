@@ -971,6 +971,15 @@ section("synth: keygen music mode");
   const mix = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.5, pitch: 60 }, { t: 0.3, dur: 0.4, pitch: 64 }], wave: "square" });
   ok("mixed peaks stay inside -1..1", mix.peaks.min >= -1 && mix.peaks.max <= 1, JSON.stringify(mix.peaks));
 
+  // The noise wave: deterministic per seed (two renders agree sample for sample - the property the
+  // embedded C player depends on) and inside the unit range.
+  const noiseA = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 60, wave: "noise" }] });
+  const noiseB = synthesize({ sampleRate: rate, notes: [{ t: 0, dur: 0.1, pitch: 60, wave: "noise" }] });
+  let noiseSame = noiseA.frames === noiseB.frames;
+  if (noiseSame) for (let i = 0; i < noiseA.frames; i++) if (noiseA.samples[i] !== noiseB.samples[i]) { noiseSame = false; break; }
+  ok("noise renders deterministically for one seed", noiseSame, `${noiseA.frames} frames`);
+  ok("noise stays inside the unit range", noiseA.peaks.min >= -1 && noiseA.peaks.max <= 1, JSON.stringify(noiseA.peaks));
+
   // The synth output survives the FLAC round trip: encoded by this project's writer, decoded by
   // the independent walk - two modules, one agreement (law 9).
   const pcm16 = Buffer.alloc(mix.frames * 2);

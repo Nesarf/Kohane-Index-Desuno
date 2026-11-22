@@ -29,6 +29,20 @@ const WAVES = {
   triangle: (phase) => 4 * Math.abs(phase - 0.5) - 1,
 };
 
+// The noise wave needs per-note state, so it is special-cased in the render loop instead of living
+// in the pure phase table. One xorshift32 state per note, seeded deterministically from the note's
+// pitch, so the same score renders the same noise on every run - which is exactly what a second
+// implementation (the C player embedded in an exe) needs to match sample for sample.
+const noiseSeed = (pitch, index) => (((pitch * 2654435761) ^ (index * 40503)) >>> 0) || 1;
+const nextNoise = (state) => {
+  let x = state[0];
+  x ^= x << 13; x >>>= 0;
+  x ^= x >>> 17;      // logical shift, matching a C uint32_t: an arithmetic >> would fill ones
+  x ^= x << 5; x >>>= 0;
+  state[0] = x;
+  return x / 0xffffffff;
+};
+
 // One voice's envelope state. Attack rises linearly to 1, decay falls linearly to the sustain
 // level, sustain holds, release falls linearly to zero. A note cut short enters release from
 // wherever the envelope currently is, so there is no click at the end of a short note.
@@ -89,17 +103,18 @@ export function synthesize(score) {
   if (!notes.length) throw new Error("a score needs at least one note");
 
   let end = 0;
-  const prepared = notes.map((n) => {
+  const prepared = notes.map((n, ni) => {
     const t = Math.max(0, Number(n.t) || 0);
     const dur = Math.max(0, Number(n.dur) || 0);
     const pitch = Number(n.pitch);
     if (!Number.isFinite(pitch)) throw new Error("every note needs a pitch");
     const vel = n.vel === undefined ? 1 : Math.max(0, Math.min(1, Number(n.vel) || 0));
-    const wave = WAVES[String(n.wave || defaultWave)];
-    if (!wave) throw new Error(`unknown wave "${n.wave || defaultWave}" (sine, square, saw, triangle)`);
+    const waveName = String(n.wave || defaultWave);
+    const wave = WAVES[waveName] || null;
+    if (!wave && waveName !== "noise") throw new Error(`unknown wave "${n.wave || defaultWave}" (sine, square, saw, triangle, noise)`);
     const noteEnd = t + dur + env.r;
     if (noteEnd > end) end = noteEnd;
-    return { t, dur, pitch, vel, wave, phase: 0 };
+    return { t, dur, pitch, vel, wave, waveName, phase: 0, noise: waveName === "noise" ? [noiseSeed(pitch, ni)] : null };
   });
 
   const frames = Math.ceil(end * sampleRate);
@@ -112,7 +127,8 @@ export function synthesize(score) {
       if (t > n.t + n.dur + env.r) break;
       const level = envelopeAt(env, t - n.t, n.dur) * n.vel;
       if (level === 0 && t > n.t + n.dur) continue;
-      samples[i] += n.wave(n.phase) * level;
+      const wv = n.noise ? nextNoise(n.noise) * 2 - 1 : n.wave(n.phase);
+      samples[i] += wv * level;
       n.phase += step;
       if (n.phase >= 1) n.phase -= Math.floor(n.phase);
     }
