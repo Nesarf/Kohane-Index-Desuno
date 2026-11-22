@@ -1137,6 +1137,37 @@ section("soundfont read");
   }
 }
 
+// ---------------------------------------------------------------- preset chunks read
+section("preset chunks read");
+{
+  const { parseFpch } = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "fxp.mjs")).href);
+  const body = Buffer.alloc(32, 0x5a);
+  const name = Buffer.concat([Buffer.from("Fixture Preset", "latin1"), Buffer.alloc(1)]);
+  const fpch = Buffer.concat([
+    Buffer.from("CcnK", "latin1"), Buffer.from([0, 0, 0, 4 + 4 + 4 + 4 + 4 + name.length + 32]),
+    Buffer.from("FPCh", "latin1"), Buffer.from([0, 0, 0, 1]),
+    Buffer.from("test", "latin1"), Buffer.from([0, 0, 0, 1]),
+    Buffer.from([0, 0, 0, name.length]), name, body,
+  ]);
+  const parsed = parseFpch(fpch);
+  ok("preset plugin and name read", parsed.plugin === "test" && parsed.name === "Fixture Preset", JSON.stringify({ plugin: parsed.plugin, name: parsed.name }));
+  ok("preset body reported after the name", parsed.bodyAt === 28 + name.length && parsed.bodyBytes === 32, JSON.stringify({ bodyAt: parsed.bodyAt, bodyBytes: parsed.bodyBytes }));
+  const bankChunk = Buffer.from(fpch);
+  bankChunk.write("FBCh", 8, "latin1");
+  ok("bank files read with their kind", parseFpch(bankChunk).kind === "bank", JSON.stringify(parseFpch(bankChunk).kind));
+  ok("a non-preset file is refused", (() => { try { parseFpch(Buffer.from("fLaCxxxx")); return false; } catch (e) { return /no CcnK envelope/.test(e.message); } })());
+  const realPresets = ["D:/Sylenth1/303 Pulse.fxp", "E:/Darbuka Data/Styles/Ayoub-Zar.fxp"];
+  if (realPresets.every((p) => fs.existsSync(p))) {
+    const syl = parseFpch(fs.readFileSync(realPresets[0]));
+    const dar = parseFpch(fs.readFileSync(realPresets[1]));
+    ok("real presets read with their plugin ids",
+      syl.plugin === "syl1" && syl.name === "303 Pulse" && dar.plugin === "WvpA" && dar.name === "Ayoub-Zar",
+      JSON.stringify({ syl: [syl.plugin, syl.name], dar: [dar.plugin, dar.name] }));
+  } else {
+    ok("real presets (skipped: not on this machine)", true, "skipped");
+  }
+}
+
 // ---------------------------------------------------------------- environment + branding
 
 section("environment + branding");

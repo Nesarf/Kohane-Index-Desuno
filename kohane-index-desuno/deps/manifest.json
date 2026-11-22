@@ -152,6 +152,22 @@
       "note": "verified by a synthesised sfbk whose table values were chosen in advance, plus the real font D:/VSTPlugins/Soundfont Enhancer/Romantic Tp.sf2 (1 preset, 1 instrument, 146 samples, 44100 Hz) where present. The real font exposed the reader's first bug: the tables live after the sample data at the tail of the file, so a small probe window always missed them - the default now walks to the end"
     },
     {
+      "id": "fxp",
+      "kind": "decoder",
+      "name": "kohane FL preset reader",
+      "origin": "built here (kohane-index-desuno)",
+      "licence": "MIT (this project)",
+      "purpose": "read the indexable facts of FL preset and bank files (CcnK + FPCh/FBCh): plugin id, preset name, and the parameter body offset and size - what a preset library is searchable by, without interpreting any plugin's parameters",
+      "usedBy": [
+        "deps/media-registry.mjs (read capability)",
+        "research/fl-studio/tools/fxp-index.mjs (corpus index, local tool)"
+      ],
+      "file": "deps/decoders/fxp.mjs",
+      "sha256": "a8173463014adbfeae3bf2a23e3a89ca75aed50759fdc26c5a21006a692309ea",
+      "bytes": 2448,
+      "note": "verified by a synthesised FPCh/FBCh whose values were chosen in advance, plus real presets (Sylenth1 syl1, Darbuka WvpA) where present. The real files proved the name is a NUL-terminated string rather than the length-prefixed field the first guess assumed, and that .fxb banks carry FBCh where .fxp presets carry FPCh. The local index tool read 58406 files under D:/Sylenth1 into 7 plugin groups (58392 syl1 incl. 2212 banks, 8 XfsX, and single files from z3ta/SWSP/KLMV/Dune2), 1 unreadable"
+    },
+    {
       "id": "external-ffmpeg",
       "kind": "binary",
       "name": "ffmpeg (external decoder, borrowed)",
