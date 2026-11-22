@@ -2452,6 +2452,74 @@ section("rust cross-check");
     } else {
       ok("the rust ztdw reader (skipped: no real corpus on this machine)", true, "skipped");
     }
+
+    // The mixer: pan coefficients parsed-level equal (cos/sin may tie on the last digit between
+    // platforms), the rendered samples bit-identical through the same loop order and f32 widening,
+    // and the two refusals sentence for sentence.
+    const mixMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "mix.mjs")).href);
+    {
+      for (const pan of [-1, -0.3, 0, 0.5, 1, 2]) {
+        const js = mixMod.panCoeffs(pan);
+        const run = spawnSync(rustBin, ["mix", "pan", String(pan)], { encoding: "utf8", windowsHide: true });
+        let r = null;
+        try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+        // cos/sin may differ by one ulp between fdlibm (V8) and Rust's libm; the algorithm is
+        // judged within one ulp, and the implementation difference is stated rather than hidden.
+        ok(`the rust pan coefficients agree with the JS side at pan ${pan} (within one ulp)`,
+          r && Math.abs(r.panL - js.panL) < 1e-15 && Math.abs(r.panR - js.panR) < 1e-15,
+          JSON.stringify({ js, rust: r, status: run.status }));
+      }
+    }
+    {
+      const stemsDoc = [
+        { frames: 8, route: "master", l: [0.25, -0.125, 0.5, 0, 0.0625, -0.5, 0.125, 0.375], r: [0.25, -0.125, 0.5, 0, 0.0625, -0.5, 0.125, 0.375] },
+        { frames: 8, route: "reverb", l: [0.1, 0.1, 0.1, 0.1, -0.2, -0.2, -0.2, -0.2], r: [0.1, 0.1, 0.1, 0.1, -0.2, -0.2, -0.2, -0.2] },
+        { frames: 5, route: "master", l: [0.3, 0.3, 0.3, 0.3, 0.3], r: [0.3, 0.3, 0.3, 0.3, 0.3] },
+      ];
+      const mixDoc = { buses: [{ name: "reverb", gain: 0.5 }], master: { gain: 0.9 } };
+      const jsStems = stemsDoc.map((s) => ({ ...s, l: new Float32Array(s.l), r: new Float32Array(s.r) }));
+      const jsGot = mixMod.mixStems(jsStems, mixDoc, { sampleRate: 48000 });
+      const jsDigest = createHash("md5").update(Buffer.from(jsGot.samples.buffer, jsGot.samples.byteOffset, jsGot.samples.byteLength)).digest("hex");
+      const stemsFile = path.join(TMP, "rust-x-stems.json");
+      const mixFile = path.join(TMP, "rust-x-mix.json");
+      fs.writeFileSync(stemsFile, JSON.stringify(stemsDoc));
+      fs.writeFileSync(mixFile, JSON.stringify(mixDoc));
+      const run = spawnSync(rustBin, ["mix", stemsFile, mixFile, "48000"], { encoding: "utf8", windowsHide: true });
+      let r = null;
+      try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+      ok("the rust mixer renders the same samples the JS mixer does (same loop order, same f32 widening)",
+        r && r.frames === jsGot.frames && r.samplesMd5 === jsDigest && r.sampleRate === 48000 && r.channels === 2,
+        JSON.stringify({ js: { frames: jsGot.frames, md5: jsDigest }, rust: r && { frames: r.frames, md5: r.samplesMd5 }, status: run.status }));
+    }
+    {
+      const badStems = [{ frames: 2, l: [0.5, 0.5], r: [0.5, 0.5], route: "ghost" }];
+      const goodMix = { buses: [{ name: "reverb", gain: 0.5 }], master: { gain: 1 } };
+      let jsMessage = "";
+      try { mixMod.mixStems(badStems.map((s) => ({ ...s, l: new Float32Array(s.l), r: new Float32Array(s.r) })), goodMix); } catch (e) { jsMessage = e.message; }
+      const stemsFile = path.join(TMP, "rust-x-stems-ghost.json");
+      const mixFile = path.join(TMP, "rust-x-mix-good.json");
+      fs.writeFileSync(stemsFile, JSON.stringify(badStems));
+      fs.writeFileSync(mixFile, JSON.stringify(goodMix));
+      const run = spawnSync(rustBin, ["mix", stemsFile, mixFile], { encoding: "utf8", windowsHide: true });
+      const rustMessage = (run.stderr || "").trim();
+      ok("the rust mixer refuses the unknown bus with the JS sentence",
+        run.status === 1 && rustMessage === jsMessage,
+        JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+    }
+    {
+      const fxMix = { tracks: [{ name: "drums", effects: [{ kind: "eq", note: "low shelf" }] }] };
+      let jsMessage = "";
+      try { mixMod.assertRenderable(fxMix); } catch (e) { jsMessage = e.message; }
+      const mixFile = path.join(TMP, "rust-x-mix-fx.json");
+      fs.writeFileSync(mixFile, JSON.stringify(fxMix));
+      const stemsFile = path.join(TMP, "rust-x-stems-empty.json");
+      fs.writeFileSync(stemsFile, "[]");
+      const run = spawnSync(rustBin, ["mix", stemsFile, mixFile], { encoding: "utf8", windowsHide: true });
+      const rustMessage = (run.stderr || "").trim();
+      ok("the rust mixer refuses the undeclared effect with the JS sentence",
+        run.status === 1 && rustMessage === jsMessage,
+        JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {

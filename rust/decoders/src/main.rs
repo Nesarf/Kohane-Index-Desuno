@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, kba, kbb, kbi, registry, ztdw};
+use kohane_decoder::{adpcm, flac, kba, kbb, kbi, mix, registry, ztdw};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -155,6 +155,7 @@ fn main() -> ExitCode {
         Some("kbb") => cmd_kbb(&args),
         Some("kbi") => cmd_kbi(&args),
         Some("ztdw") => cmd_ztdw(&args),
+        Some("mix") => cmd_mix(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -183,6 +184,8 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
             eprintln!("       kohane-decoder ztdw config <file>");
             eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
+            eprintln!("       kohane-decoder mix <stems.json> <mix.json> [sampleRate]");
+            eprintln!("       kohane-decoder mix pan <value>");
             ExitCode::from(2)
         }
     }
@@ -624,6 +627,71 @@ fn cmd_ztdw(args: &[String]) -> ExitCode {
             eprintln!("usage: kohane-decoder ztdw config <file>");
             eprintln!("       kohane-decoder ztdw sample <mergeFile> <source.json> [base]");
             ExitCode::from(2)
+        }
+    }
+}
+
+fn cmd_mix(args: &[String]) -> ExitCode {
+    let Some(verb) = args.get(2).map(String::as_str) else {
+        eprintln!("usage: kohane-decoder mix <stems.json> <mix.json> [sampleRate]");
+        eprintln!("       kohane-decoder mix pan <value>");
+        return ExitCode::from(2);
+    };
+    match verb {
+        "pan" => {
+            let Some(value) = args.get(3).and_then(|s| s.parse::<f64>().ok()) else {
+                eprintln!("usage: kohane-decoder mix pan <value>");
+                return ExitCode::from(2);
+            };
+            let (l, r) = mix::pan_coeffs(value);
+            println!(
+                "{}",
+                kohane_decoder::json::Json::obj(vec![
+                    ("panL", kohane_decoder::json::Json::num(l)),
+                    ("panR", kohane_decoder::json::Json::num(r)),
+                ])
+                .render()
+            );
+            ExitCode::SUCCESS
+        }
+        _ => {
+            let (Some(stems_file), Some(mix_file)) = (args.get(2), args.get(3)) else {
+                eprintln!("usage: kohane-decoder mix <stems.json> <mix.json> [sampleRate]");
+                return ExitCode::from(2);
+            };
+            let rate: u32 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(44100);
+            let read_json = |f: &str| -> Result<kohane_decoder::json::Json, String> {
+                let text = fs::read_to_string(f).map_err(|e| format!("cannot read {f}: {e}"))?;
+                kohane_decoder::json::parse(&text)
+            };
+            let stems = match read_json(stems_file) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
+            let mix_doc = match read_json(mix_file) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
+            if let Err(e) = mix::assert_renderable(&mix_doc) {
+                eprintln!("{e}");
+                return ExitCode::from(1);
+            }
+            match mix::mix_stems(&stems, &mix_doc, rate) {
+                Ok(r) => {
+                    println!("{}", r.render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
         }
     }
 }

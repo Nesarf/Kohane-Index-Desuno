@@ -8,6 +8,7 @@ pub mod kba;
 pub mod kbb;
 pub mod kbi;
 pub mod md5;
+pub mod mix;
 pub mod parsers;
 pub mod registry;
 pub mod sha256;
