@@ -2285,6 +2285,110 @@ section("rust cross-check");
     } else {
       ok("the rust kbb converter (skipped: no real SoundFont on this machine)", true, "skipped");
     }
+
+    // The KBI instrument: the write half byte-exact with the JS document, the read receipt string
+    // for string, the two preset shapes converted byte-exact, and every refusal carrying the JS
+    // sentence. The recipe key is present only when the caller gives one, so both shapes are judged.
+    const kbiMod = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kbi.mjs")).href);
+    const { writeKbi, readKbi, convertPresetToKbi } = kbiMod;
+    const kbiInstruments = [
+      { name: "saw lead", kind: "preset", role: "lead", source: "preset", params: "QUJD", paramBytes: 3 },
+      { name: "banked", kind: "bank", role: "unknown", params: "AA==", paramBytes: 1, recipe: { a: 1 } },
+    ];
+    for (const inst of kbiInstruments) {
+      const jsBytes = writeKbi(inst);
+      const paramsFile = path.join(TMP, "rust-x-kbi-params.json");
+      fs.writeFileSync(paramsFile, JSON.stringify(inst));
+      const out = path.join(TMP, "rust-x.kbi");
+      const run = spawnSync(rustBin, ["kbi", "write", out, paramsFile], { encoding: "utf8", windowsHide: true });
+      const rustBytes = fs.existsSync(out) ? fs.readFileSync(out) : Buffer.alloc(0);
+      ok("the rust kbi writer is byte-exact with the JS original",
+        run.status === 0 && rustBytes.equals(jsBytes),
+        JSON.stringify({ js: jsBytes.length, rust: rustBytes.length, status: run.status }));
+      const jsReceipt = JSON.stringify(readKbi(jsBytes));
+      const rRun = spawnSync(rustBin, ["kbi", "read", out], { encoding: "utf8", windowsHide: true });
+      const rustReceipt = (rRun.stdout || "").trim();
+      ok("the rust kbi reader agrees with the JS reader's own receipt",
+        rRun.status === 0 && rustReceipt === jsReceipt,
+        JSON.stringify({ js: jsReceipt, rust: rustReceipt, status: rRun.status }));
+    }
+    {
+      const kbiRefuseCases = [
+        { name: "envelope", bad: () => Buffer.from("nope") },
+        { name: "marker", bad: () => Buffer.from('{"format":"nope"}') },
+        { name: "version", bad: () => Buffer.from('{"format":"kohane-instrument","version":9}') },
+        { name: "no-name", bad: () => Buffer.from('{"format":"kohane-instrument","version":1}') },
+        { name: "no-params", bad: () => Buffer.from('{"format":"kohane-instrument","version":1,"name":"x"}') },
+      ];
+      for (const c of kbiRefuseCases) {
+        const badBytes = c.bad();
+        let jsMessage = "";
+        try { readKbi(badBytes); } catch (e) { jsMessage = e.message; }
+        const f = path.join(TMP, `rust-x-refuse-kbi-${c.name}.kbi`);
+        fs.writeFileSync(f, badBytes);
+        const run = spawnSync(rustBin, ["kbi", "read", f], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust kbi reader refuses ${c.name} with the JS sentence`,
+          run.status === 1 && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    }
+    {
+      const ffpBytes = Buffer.concat([Buffer.from("FfFp", "latin1"), Buffer.from([1, 2, 3, 4, 5])]);
+      const jsDoc = JSON.stringify(convertPresetToKbi({ bytes: ffpBytes, name: "my patch", role: "fx" }));
+      const inFile = path.join(TMP, "rust-x-fixture.ffp");
+      fs.writeFileSync(inFile, ffpBytes);
+      const out = path.join(TMP, "rust-x-ffp.kbi");
+      const run = spawnSync(rustBin, ["kbi", "convert", inFile, out, "my patch", "fx"], { encoding: "utf8", windowsHide: true });
+      const rustDoc = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
+      ok("the rust four-char-id conversion matches the JS document byte for byte",
+        run.status === 0 && rustDoc === jsDoc,
+        JSON.stringify({ js: jsDoc, rust: rustDoc, status: run.status }));
+    }
+    if (fs.existsSync(fxpSample)) {
+      let fxpFile = null;
+      const walkOne = (d) => {
+        if (fxpFile) return;
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          if (fxpFile) return;
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) walkOne(p);
+          else if (/\.fxp$/i.test(e.name)) fxpFile = p;
+        }
+      };
+      walkOne(fxpSample);
+      if (fxpFile) {
+        const bytes = fs.readFileSync(fxpFile);
+        const jsDoc = JSON.stringify(convertPresetToKbi({ bytes, name: null, role: "lead" }));
+        const out = path.join(TMP, "rust-x-ccnk.kbi");
+        const run = spawnSync(rustBin, ["kbi", "convert", fxpFile, out, "", "lead"], { encoding: "utf8", windowsHide: true });
+        const rustDoc = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
+        ok("the rust CcnK conversion matches the JS document byte for byte on a real preset",
+          run.status === 0 && rustDoc === jsDoc,
+          JSON.stringify({ js: jsDoc.slice(0, 80), rust: rustDoc.slice(0, 80), status: run.status }));
+      } else {
+        ok("the rust CcnK conversion (skipped: no preset found)", true, "skipped");
+      }
+    } else {
+      ok("the rust CcnK conversion (skipped: no corpus)", true, "skipped");
+    }
+    {
+      const refuseCases = [
+        { name: "too-short", bytes: Buffer.from("abc"), js: null },
+        { name: "bad-id", bytes: Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]), js: null },
+      ];
+      for (const c of refuseCases) {
+        let jsMessage = "";
+        try { convertPresetToKbi({ bytes: c.bytes }); } catch (e) { jsMessage = e.message; }
+        const f = path.join(TMP, `rust-x-refuse-conv-${c.name}.bin`);
+        fs.writeFileSync(f, c.bytes);
+        const run = spawnSync(rustBin, ["kbi", "convert", f, path.join(TMP, "x.kbi")], { encoding: "utf8", windowsHide: true });
+        const rustMessage = (run.stderr || "").trim();
+        ok(`the rust preset converter refuses ${c.name} with the JS sentence`,
+          run.status === 1 && rustMessage === jsMessage,
+          JSON.stringify({ js: jsMessage, rust: rustMessage, status: run.status }));
+      }
+    }
     const capsRun = spawnSync(rustBin, ["capabilities"], { encoding: "utf8", windowsHide: true });
     let rCaps = null;
     if (!capsRun.error && capsRun.status === 0) {

@@ -14,7 +14,7 @@
 // the same bytes and the cross-check is byte-exact). The KBA1 container is tier 2 (ADPCM) and the
 // FLAC stream is byte-identical with deps/decoders/flac-encoder.mjs.
 use kohane_decoder::parsers::{fxp, kbmedia, lm4, sf2};
-use kohane_decoder::{adpcm, flac, kba, kbb, registry};
+use kohane_decoder::{adpcm, flac, kba, kbb, kbi, registry};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -153,6 +153,7 @@ fn main() -> ExitCode {
         Some("kb") => cmd_kb(&args),
         Some("kba") => cmd_kba(&args),
         Some("kbb") => cmd_kbb(&args),
+        Some("kbi") => cmd_kbi(&args),
         Some("capabilities") => {
             println!("{}", kbmedia::capabilities().render());
             ExitCode::SUCCESS
@@ -176,6 +177,9 @@ fn main() -> ExitCode {
             eprintln!("       kohane-decoder kba stats <file.kba>");
             eprintln!("       kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
             eprintln!("       kohane-decoder kbb read <file.kbb>");
+            eprintln!("       kohane-decoder kbi write <out.kbi> [params.json|-]");
+            eprintln!("       kohane-decoder kbi read <file.kbi>");
+            eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
             ExitCode::from(2)
         }
     }
@@ -441,6 +445,119 @@ fn cmd_kbb(args: &[String]) -> ExitCode {
         _ => {
             eprintln!("usage: kohane-decoder kbb convert <in.sf2> <out.kbb> [name] [targetRate] [tier]");
             eprintln!("       kohane-decoder kbb read <file.kbb>");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn cmd_kbi(args: &[String]) -> ExitCode {
+    let Some(verb) = args.get(2).map(String::as_str) else {
+        eprintln!("usage: kohane-decoder kbi write <out.kbi> [params.json|-]");
+        eprintln!("       kohane-decoder kbi read <file.kbi>");
+        eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
+        return ExitCode::from(2);
+    };
+    match verb {
+        "write" => {
+            let Some(output) = args.get(3) else {
+                eprintln!("usage: kohane-decoder kbi write <out.kbi> [params.json|-]");
+                return ExitCode::from(2);
+            };
+            let params_arg = args.get(4).map(String::as_str).unwrap_or("-");
+            let text = match params_arg {
+                "-" => {
+                    let mut s = String::new();
+                    if let Err(e) = std::io::stdin().read_to_string(&mut s) {
+                        eprintln!("cannot read params from stdin: {e}");
+                        return ExitCode::from(1);
+                    }
+                    s
+                }
+                file => match fs::read_to_string(file) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("cannot read {file}: {e}");
+                        return ExitCode::from(1);
+                    }
+                },
+            };
+            let params = match kohane_decoder::json::parse(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
+            let bytes = kbi::write_kbi(&params);
+            match fs::write(output, &bytes) {
+                Ok(()) => {
+                    println!("wrote {} bytes to {output}", bytes.len());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("cannot write {output}: {e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "read" => {
+            let Some(target) = args.get(3) else {
+                eprintln!("usage: kohane-decoder kbi read <file.kbi>");
+                return ExitCode::from(2);
+            };
+            let buf = match fs::read(target) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {target}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            match kbi::read_kbi(&buf) {
+                Ok(r) => {
+                    println!("{}", r.render());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "convert" => {
+            let (Some(input), Some(output)) = (args.get(3), args.get(4)) else {
+                eprintln!("usage: kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
+                return ExitCode::from(2);
+            };
+            let name = args.get(5).map(String::as_str);
+            let role = args.get(6).map(String::as_str).unwrap_or("unknown");
+            let buf = match fs::read(input) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("cannot read {input}: {e}");
+                    return ExitCode::from(1);
+                }
+            };
+            match kbi::convert_preset_to_kbi(&buf, name, role) {
+                Ok(doc) => match fs::write(output, doc.render()) {
+                    Ok(()) => {
+                        println!("converted {input} into {output}");
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("cannot write {output}: {e}");
+                        ExitCode::from(1)
+                    }
+                },
+                Err(e) => {
+                    eprintln!("{e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        _ => {
+            eprintln!("usage: kohane-decoder kbi write <out.kbi> [params.json|-]");
+            eprintln!("       kohane-decoder kbi read <file.kbi>");
+            eprintln!("       kohane-decoder kbi convert <in.file> <out.kbi> [name] [role]");
             ExitCode::from(2)
         }
     }

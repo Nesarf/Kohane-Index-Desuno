@@ -6,6 +6,7 @@ pub mod flac;
 pub mod json;
 pub mod kba;
 pub mod kbb;
+pub mod kbi;
 pub mod md5;
 pub mod parsers;
 pub mod registry;
