@@ -5105,6 +5105,38 @@ const TOOL_INPUT_SCHEMAS = {
 // TOOLS: the model-facing tools as plain async functions, each entry = { name, description, inputSchema, execute(args) }.
 // The execute bodies are extracted verbatim from lib/index.js (defineTool.execute). Every harness
 // (DSH, MCP, CLI) calls these same execute functions, so behavior is identical everywhere.
+// ---- the rust bridge ------------------------------------------------------------
+// The ops wired into the rust dispatch (kept in step with rust/decoders/src/registry.rs
+// dispatched lists; the selfcheck rust section asserts the two agree). The bridge itself is
+// opt-in: without KOHANE_RUST_BRIDGE every op runs the JS original, and with it a wired op
+// answers from the rust binary with the same shape - a bridge failure falls through, a
+// handled:false answer falls through, and nothing is ever half-answered.
+const RUST_DISPATCHED_OPS = new Set(["kba", "kbb", "ztdw", "kbi", "mix"]);
+
+function rustBinDefault() {
+  try {
+    const here = fileURLToPath(import.meta.url);
+    return path.join(path.dirname(path.dirname(path.dirname(here))), "rust", "decoders", "target", "release", "kohane-decoder.exe");
+  } catch {
+    return null;
+  }
+}
+
+function rustBridgeOp(tool, op, args) {
+  try {
+    const bin = process.env.KOHANE_RUST_BIN || rustBinDefault();
+    if (!bin || !fs.existsSync(bin)) return null;
+    const argsFile = path.join(os.tmpdir(), `kohane-bridge-${process.pid}-${Date.now()}.json`);
+    fs.writeFileSync(argsFile, JSON.stringify(args));
+    const run = spawnSync(bin, ["op", tool, op, argsFile], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+    fs.rmSync(argsFile, { force: true });
+    if (run.error || run.status !== 0) return null;
+    return JSON.parse(run.stdout);
+  } catch {
+    return null;
+  }
+}
+
 const TOOLS = [
   {
     name: "library_record",
@@ -5789,6 +5821,14 @@ const TOOLS = [
     inputSchema: TOOL_INPUT_SCHEMAS.library_audio,
     async execute(args) {
       const op = String(args.op || "peaks").toLowerCase();
+      // The rust bridge: when KOHANE_RUST_BRIDGE is set and the op is wired into the rust
+      // dispatch, the answer comes from the rust binary through its `op` entry - the shell
+      // routes, the answer shape stays the JS tool's own. A bridge failure or a handled:false
+      // answer falls through to the JS original, never to a broken answer.
+      if (process.env.KOHANE_RUST_BRIDGE && RUST_DISPATCHED_OPS.has(op)) {
+        const bridged = rustBridgeOp("library_audio", op, args);
+        if (bridged !== null && bridged.handled !== false) return bridged;
+      }
       const buckets = Math.min(Math.max(Number(args.buckets) || 512, 32), AUDIO_MAX_BUCKETS);
 
       if (op === "info") {

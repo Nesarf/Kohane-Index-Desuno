@@ -2669,6 +2669,39 @@ section("rust cross-check");
               JSON.stringify({ rust: r, status: run.status }));
           }
         }
+        {
+          // The thin shell routing: with the bridge switched on, a wired op answers from the rust
+          // binary in the same shape the JS original answers in; a broken bridge falls through to
+          // the JS original; and the JS whitelist agrees with the rust registry's dispatched list.
+          const kbaFile = path.join(TMP, "rust-x-adpcm.kba");
+          if (fs.existsSync(kbaFile)) {
+            const native = await audioToolForDispatch.execute({ op: "kba", path: kbaFile });
+            process.env.KOHANE_RUST_BRIDGE = "1";
+            process.env.KOHANE_RUST_BIN = rustBin;
+            const bridged = await audioToolForDispatch.execute({ op: "kba", path: kbaFile });
+            ok("the rust bridge answers kba read in the same shape as the JS original",
+              JSON.stringify(bridged) === JSON.stringify(native),
+              JSON.stringify({ native: JSON.stringify(native).slice(0, 120), bridged: JSON.stringify(bridged).slice(0, 120) }));
+            process.env.KOHANE_RUST_BIN = path.join(TMP, "no-such-rust-binary.exe");
+            const fellBack = await audioToolForDispatch.execute({ op: "kba", path: kbaFile });
+            ok("a broken bridge falls through to the JS original",
+              JSON.stringify(fellBack) === JSON.stringify(native),
+              JSON.stringify({ native: JSON.stringify(native).slice(0, 120), fellBack: JSON.stringify(fellBack).slice(0, 120) }));
+            delete process.env.KOHANE_RUST_BIN;
+            delete process.env.KOHANE_RUST_BRIDGE;
+          } else {
+            ok("the rust bridge (skipped: no fixture container)", true, "skipped");
+          }
+          const regRun = spawnSync(rustBin, ["registry"], { encoding: "utf8", windowsHide: true });
+          let reg = null;
+          try { reg = regRun.status === 0 ? JSON.parse(regRun.stdout) : null; } catch { reg = null; }
+          const rustDispatched = reg && reg.tools && reg.tools.find((t) => t.name === "library_audio")?.dispatched;
+          const jsWhitelist = ["kba", "kbb", "ztdw", "kbi", "mix"].sort();
+          const rustSorted = rustDispatched ? [...rustDispatched].sort() : [];
+          ok("the JS bridge whitelist agrees with the rust registry's dispatched list",
+            reg && JSON.stringify(rustSorted) === JSON.stringify(jsWhitelist),
+            JSON.stringify({ js: jsWhitelist, rust: rustSorted, status: regRun.status }));
+        }
       } else {
         ok("the rust op dispatch ztdw (skipped: no real corpus on this machine)", true, "skipped");
       }
