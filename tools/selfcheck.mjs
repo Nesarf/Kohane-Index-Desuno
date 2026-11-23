@@ -2607,14 +2607,6 @@ section("rust cross-check");
             JSON.stringify({ js: js && JSON.stringify({ base: js.base, frames: js.frames, observedPeak: js.observedPeak }), rust: r && JSON.stringify({ base: r.base, frames: r.frames, observedPeak: r.observedPeak }), status: run.status }));
         }
         {
-          const run = spawnSync(rustBin, ["op", "library_audio", "mix", opArgs({})], { encoding: "utf8", windowsHide: true });
-          let r = null;
-          try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
-          ok("the rust op dispatch names the missing piece for op=mix (synth)",
-            r && r.handled === false && r.engine === "js" && String(r.reason).includes("synth"),
-            JSON.stringify({ rust: r, status: run.status }));
-        }
-        {
           // op=kbi convert: the four-char-id shape takes its name from the file name and its role
           // from the plugin id through the same hint tables both sides carry.
           const drumBytes = Buffer.concat([Buffer.from("drum", "latin1"), Buffer.from([1, 2, 3, 4, 5])]);
@@ -2627,6 +2619,43 @@ section("rust cross-check");
           ok("the rust op dispatch answers kbi convert dryRun in the JS tool's own shape",
             run.status === 0 && rust === jsText,
             JSON.stringify({ js: jsText, rust: rust, status: run.status }));
+        }
+        {
+          // op=mix end to end: a score with part-routed notes and a two-track mix with a reverb
+          // bus. The rust side renders inline, so the scheduling fields (threads, mode, ms,
+          // poolMs) differ by design and are stated; every deterministic field must agree.
+          const kbmWrite = await import(pathToFileURL(path.join(ROOT, "kohane-index-desuno", "deps", "decoders", "kb-media.mjs")).href);
+          const scoreDoc = {
+            title: "dispatch mix score", bpm: 120, key: "C", sampleRate: 8000, wave: "square",
+            adsr: { a: 0.001, d: 0.01, s: 0.7, r: 0.02 },
+            parts: ["lead", "bass"],
+            notes: [
+              { t: 0, dur: 0.05, pitch: 69, part: "lead" },
+              { t: 0.06, dur: 0.05, pitch: 57, part: "bass" },
+              { t: 0.12, dur: 0.04, pitch: 72, part: "lead", vel: 0.8 },
+            ],
+          };
+          const mixDoc = {
+            title: "dispatch mix", sampleRate: 8000,
+            tracks: [
+              { name: "lead", gain: 0.8, pan: 0.2, route: "master", effects: [] },
+              { name: "bass", gain: 1.0, pan: -0.3, route: "reverb", effects: [] },
+            ],
+            buses: [{ name: "reverb", gain: 0.5, effects: [] }],
+            master: { gain: 0.9, effects: [] },
+          };
+          const scoreFile = path.join(TMP, "rust-x-mix-score.kbs");
+          const mixFile = path.join(TMP, "rust-x-mix-doc.kbm");
+          fs.writeFileSync(scoreFile, kbmWrite.writeKbs(scoreDoc));
+          fs.writeFileSync(mixFile, kbmWrite.writeKbm(mixDoc));
+          const js = await audioToolForDispatch.execute({ op: "mix", score: scoreFile, mix: mixFile });
+          const run = spawnSync(rustBin, ["op", "library_audio", "mix", opArgs({ score: scoreFile, mix: mixFile })], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+          let r = null;
+          try { r = run.status === 0 ? JSON.parse(run.stdout) : null; } catch { r = null; }
+          const deterministic = (x) => ({ ok: x.ok, op: x.op, tracks: x.tracks, sampleRate: x.sampleRate, frames: x.frames, durationSec: x.durationSec, channels: x.channels, note: x.note });
+          ok("the rust op dispatch answers mix end to end in the JS tool's own shape (scheduling fields stated)",
+            run.status === 0 && r && JSON.stringify(deterministic(r)) === JSON.stringify(deterministic(js)),
+            JSON.stringify({ js: deterministic(js), rust: r && deterministic(r), status: run.status }));
         }
         {
           // The role classifier on the same constructed inputs: the drum id lands on the drum

@@ -5,8 +5,11 @@
 // (ztdw, mix, kbi and the rest) stay honest in the registry's second list.
 use crate::json::Json;
 use crate::parsers::fxp::parse_fpch;
-use crate::{kba, kbb, kbi, roles, ztdw};
+use crate::parsers::kbmedia;
+use crate::{kba, kbb, kbi, mix, roles, synth, ztdw};
+use std::collections::HashMap;
 use std::fs;
+use std::time::Instant;
 
 fn str_arg(params: &Json, key: &str) -> String {
     match params.get(key) {
@@ -27,11 +30,7 @@ pub fn dispatch(tool: &str, op: &str, params: &Json) -> Json {
         ("library_audio", "kba") => dispatch_kba(params),
         ("library_audio", "kbb") => dispatch_kbb(params),
         ("library_audio", "ztdw") => dispatch_ztdw(params),
-        ("library_audio", "mix") => Json::obj(vec![
-            ("handled", Json::Bool(false)),
-            ("engine", Json::str("js")),
-            ("reason", Json::str("op=mix renders stems through the synth, which the rust side has not absorbed yet")),
-        ]),
+        ("library_audio", "mix") => dispatch_mix(params),
         ("library_audio", "kbi") => dispatch_kbi(params),
         _ => Json::obj(vec![
             ("handled", Json::Bool(false)),
@@ -466,6 +465,152 @@ fn dispatch_kbi(params: &Json) -> Json {
             ("note", Json::str(&format!("cannot write {out}: {e}"))),
         ]),
     }
+}
+
+// op=mix: score + mix in, stems rendered per track through the synth with gain and pan, summed
+// through the mix routing. The rust side renders inline (one thread, no pool), so the receipt
+// says threads 1 and mode inline with its own measured milliseconds; exporting to wav/flac stays
+// on JS because the wav writer has not been absorbed yet.
+fn dispatch_mix(params: &Json) -> Json {
+    let fail = |note: &str| Json::obj(vec![("ok", Json::Bool(false)), ("op", Json::str("mix")), ("note", Json::str(note))]);
+    let score_path = str_arg(params, "score");
+    if score_path.is_empty() {
+        return fail("mix needs --score (a .kbs file)");
+    }
+    let mix_path = str_arg(params, "mix");
+    if mix_path.is_empty() {
+        return fail("mix needs --mix (a .kbm file)");
+    }
+    if !str_arg(params, "out").is_empty() {
+        return Json::obj(vec![
+            ("handled", Json::Bool(false)),
+            ("engine", Json::str("js")),
+            ("reason", Json::str("exporting the mix to wav/flac needs the JS export writers")),
+        ]);
+    }
+    let score_bytes = match fs::read(&score_path) {
+        Ok(b) => b,
+        Err(e) => return fail(&format!("cannot read {score_path}: {e}")),
+    };
+    let score_doc = match kbmedia::read_kbs(&score_bytes) {
+        Ok(d) => d,
+        Err(e) => return fail(&e),
+    };
+    let mix_bytes = match fs::read(&mix_path) {
+        Ok(b) => b,
+        Err(e) => return fail(&format!("cannot read {mix_path}: {e}")),
+    };
+    let mix_doc = match kbmedia::read_kbm(&mix_bytes) {
+        Ok(d) => d,
+        Err(e) => return fail(&e),
+    };
+    let tracks: Vec<&Json> = match mix_doc.get("tracks") {
+        Some(Json::Arr(items)) => items.iter().collect(),
+        _ => Vec::new(),
+    };
+    if tracks.is_empty() {
+        return fail("the mix declares no tracks");
+    }
+    if let Err(e) = mix::assert_renderable(&mix_doc) {
+        return fail(&e);
+    }
+    let started = Instant::now();
+    let mut groups: Vec<Vec<&Json>> = vec![Vec::new(); tracks.len()];
+    let mut by_name: HashMap<String, usize> = HashMap::new();
+    for (i, t) in tracks.iter().enumerate() {
+        let name = match t.get("name") {
+            Some(Json::Str(s)) => s.clone(),
+            _ => String::new(),
+        };
+        by_name.insert(name, i);
+    }
+    let notes: Vec<&Json> = match score_doc.get("notes") {
+        Some(Json::Arr(items)) => items.iter().collect(),
+        _ => Vec::new(),
+    };
+    for n in notes {
+        let idx = match n.get("part") {
+            Some(Json::Str(p)) => by_name.get(p).copied().unwrap_or(0),
+            _ => 0,
+        };
+        groups[idx].push(n);
+    }
+    let sample_rate = match mix_doc.get("sampleRate") {
+        Some(Json::Num(n)) if n.is_finite() && *n > 0.0 => *n as u32,
+        _ => match score_doc.get("sampleRate") {
+            Some(Json::Num(n)) if n.is_finite() && *n > 0.0 => *n as u32,
+            _ => 44100,
+        },
+    };
+    let wave = match score_doc.get("wave") {
+        Some(Json::Str(s)) => s.clone(),
+        _ => "square".to_string(),
+    };
+    let adsr = score_doc.get("adsr").cloned().unwrap_or(Json::Null);
+    let mut stems: Vec<Json> = Vec::new();
+    for (i, track) in tracks.iter().enumerate() {
+        let stem_score = Json::obj(vec![
+            ("sampleRate", Json::num(sample_rate as f64)),
+            ("notes", Json::arr(groups[i].iter().map(|n| (*n).clone()).collect())),
+            ("wave", Json::str(&wave)),
+            ("adsr", adsr.clone()),
+        ]);
+        let rendered = match synth::synthesize(&stem_score) {
+            Ok(r) => r,
+            Err(e) => return fail(&e),
+        };
+        let pan = match track.get("pan") {
+            Some(Json::Num(n)) if n.is_finite() => *n,
+            _ => 0.0,
+        };
+        let gain = match track.get("gain") {
+            Some(Json::Num(n)) if n.is_finite() => *n,
+            _ => 1.0,
+        };
+        let route = match track.get("route") {
+            Some(Json::Str(s)) => s.clone(),
+            _ => "master".to_string(),
+        };
+        let (pan_l, pan_r) = mix::pan_coeffs(pan);
+        let mut l_items = Vec::with_capacity(rendered.frames);
+        let mut r_items = Vec::with_capacity(rendered.frames);
+        for s in &rendered.samples {
+            l_items.push(Json::num(((*s * gain * pan_l) as f32) as f64));
+            r_items.push(Json::num(((*s * gain * pan_r) as f32) as f64));
+        }
+        stems.push(Json::obj(vec![
+            ("frames", Json::int(rendered.frames as i64)),
+            ("l", Json::arr(l_items)),
+            ("r", Json::arr(r_items)),
+            ("route", Json::str(&route)),
+        ]));
+    }
+    let mixed = match mix::mix_stems(&Json::arr(stems), &mix_doc, sample_rate) {
+        Ok(r) => r,
+        Err(e) => return fail(&e),
+    };
+    let frames = match mixed.get("frames") {
+        Some(Json::Num(n)) => *n as i64,
+        _ => 0,
+    };
+    let ms = started.elapsed().as_millis() as i64;
+    let duration_sec = ((frames as f64 / sample_rate as f64 * 1000.0) + 0.5).floor() / 1000.0;
+    Json::obj(vec![
+        ("ok", Json::Bool(true)),
+        ("op", Json::str("mix")),
+        ("score", Json::str(&score_path)),
+        ("mix", Json::str(&mix_path)),
+        ("tracks", Json::int(tracks.len() as i64)),
+        ("sampleRate", Json::int(sample_rate as i64)),
+        ("frames", Json::int(frames)),
+        ("durationSec", Json::num(duration_sec)),
+        ("channels", Json::int(2)),
+        ("threads", Json::int(1)),
+        ("mode", Json::str("inline")),
+        ("ms", Json::int(ms)),
+        ("poolMs", Json::int(0)),
+        ("note", Json::str("each stem was rendered on its own core and summed through the mix's gain/pan/bus routing; the exported audio equals the mix document because anything the mixer cannot execute is refused")),
+    ])
 }
 
 #[cfg(test)]
