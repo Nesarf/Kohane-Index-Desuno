@@ -7550,6 +7550,12 @@ const TOOLS = [
     inputSchema: TOOL_INPUT_SCHEMAS.library_sessions,
     async execute(args) {
       const op = String(args.op || "list").toLowerCase();
+      // An unknown op is refused before anything environmental is consulted: the contract says
+      // the refusal must name the accepted ops, and a runtime without a zstd decoder must still
+      // refuse an unknown op with that list rather than answer about its decoder.
+      if (op !== "status" && op !== "list" && op !== "read" && op !== "tail" && op !== "search" && op !== "record") {
+        return { ok: false, op, timezone: timezoneInfo(), note: `unknown op "${args.op}", allowed: list, read, tail, search, record, status` };
+      }
       const store = sessionsDir();
       if (!ZSTD_AVAILABLE) {
         return { ok: false, op, store, timezone: timezoneInfo(), note: "this runtime has no zstd decoder (node:zlib.zstdDecompressSync needs Node v22.15+/v23.8+), and sessions are stored compressed - the store cannot be read here" };

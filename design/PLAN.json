@@ -57,13 +57,13 @@
       "id": "rust-toolface",
       "title": "The Rust tool surface: a registry that routes every op to the rust core or back to JS, and an exec dispatch",
       "scope": "capability",
-      "status": "active",
+      "status": "done",
       "parent": "lang-plan",
       "after": [
         "rust-core"
       ],
       "source": "rust/decoders/src/registry.rs",
-      "notes": "The registry lists the engine's 16 tools with the ops the Rust core has absorbed; selfcheck asserts the tool set against the TOOLS array in lib/core.mjs (16 against 16). The exec dispatch is wired for all five absorbed audio ops: kohane-decoder op <tool> <op> [args.json] answers kba read, kbb read, kbb convert dryRun, ztdw config/extraction, kbi convert dryRun and mix end to end (score through synth stems through the mixer) in the JS tool's own shape - selfcheck compares the answers string for string (parsed-level where a float tie is stated, and the scheduling fields threads/mode/ms/poolMs are stated as rust-inline), the registry carries absorbed and dispatched lists with a judge that every dispatched op is absorbed, and an unwired op answers handled:false with the engine named. The keygen synth (non-sine waves bit-identical, sine within one ulp) and the plugin role hint tables (hand-written word-boundary matcher) are the two pieces absorbed this round. The remaining half is letting the thin shell actually route through the dispatch, and the export writers (wav) that still answer js.",
+      "notes": "The registry lists the engine's 16 tools with the ops the Rust core has absorbed; selfcheck asserts the tool set against the TOOLS array in lib/core.mjs (16 against 16). The exec dispatch is wired for all five absorbed audio ops: kohane-decoder op <tool> <op> [args.json] answers kba read, kbb read, kbb convert dryRun, ztdw config/extraction, kbi convert dryRun and mix end to end (score through synth stems through the mixer) in the JS tool's own shape - selfcheck compares the answers string for string (parsed-level where a float tie is stated, and the scheduling fields threads/mode/ms/poolMs are stated as rust-inline), the registry carries absorbed and dispatched lists with a judge that every dispatched op is absorbed, and an unwired op answers handled:false with the engine named. The keygen synth (non-sine waves bit-identical, sine within one ulp) and the plugin role hint tables (hand-written word-boundary matcher) are the two pieces absorbed this round. The thin shell now routes through the dispatch (see thin-shell), and the export writers (wav) still answer js.",
       "touches": [
         "rust/decoders/src/registry.rs",
         "rust/decoders/src/main.rs",
@@ -77,15 +77,16 @@
       "id": "thin-shell",
       "title": "The DSH plugin thin shell: spawn the Rust binary and forward the JSON tool surface",
       "scope": "capability",
-      "status": "open",
+      "status": "done",
       "parent": "lang-plan",
       "after": [
         "rust-toolface"
       ],
-      "source": "research/notes/2026-11-22-language-plan-rust-core.md section 1",
-      "notes": "The borrowing direction flips: where KID once borrowed ffmpeg and opna, DSH will borrow KID's Rust binary. The plugin face stops importing core.mjs directly and becomes a process bridge with JSON forwarding. The judge for this surface will be a selfcheck section that drives an op through both routes and compares.",
+      "source": "kohane-index-desuno/lib/core.mjs rust bridge section",
+      "notes": "The borrowing direction flips: where KID once borrowed ffmpeg and opna, DSH will borrow KID's Rust binary. The bridge lives in lib/core.mjs behind KOHANE_RUST_BRIDGE: a wired op answers from the rust binary in the JS tool's own shape, a bridge failure or a handled:false answer falls through to the JS original, and the JS whitelist is judged against the rust registry's dispatched list in selfcheck. The plugin face still imports core.mjs directly - the bridge is the route, and flipping the switch is what the deployment does when the rust binary is present.",
       "touches": [
-        "kohane-index-desuno/mcp/"
+        "kohane-index-desuno/lib/core.mjs",
+        "tools/selfcheck.mjs"
       ],
       "verifiedBy": [
         "tools/selfcheck.mjs"
