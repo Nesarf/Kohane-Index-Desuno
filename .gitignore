@@ -32,6 +32,12 @@ research/
 # Machine-local format knowledge: the engine loads it if present, and it is never published (recovered from this machine's own files, so it is not part of the product).
 deps/local/
 
+# Machine-local sibling declaration for tools/check-isolation.mjs: it names this machine's own checkout of
+# the sibling build, so the same reason applies - declared beside the checkout, kept off the published tree.
+# The file itself says as much; it was tracked until 2026-11-26, which is why one machine-specific path
+# (a drive letter) had been sitting in the index.
+.isolation.local.json
+
 # Downloaded or borrowed tools: recorded in deps/manifest.json, never committed
 deps/downloads/
 
